@@ -23,9 +23,17 @@ interface ContactData {
   lastContactAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  // AI-generated fields
+  aiLabels?: string[];
+  aiSegment?: string;
+  aiSentiment?: string;
+  aiScore?: number;
+  aiSummary?: string;
+  needsHumanReview?: boolean;
+  escalationReason?: string;
 }
 
-// Seed some demo data
+// Seed some demo data with AI labels
 function seedDemoData() {
   if (contacts.size === 0) {
     const demoContacts: Omit<ContactData, "id">[] = [
@@ -42,6 +50,13 @@ function seedDemoData() {
         lastContactAt: new Date(),
         createdAt: new Date(),
         updatedAt: new Date(),
+        // AI fields
+        aiLabels: ["returning", "decision_maker"],
+        aiSegment: "VIP",
+        aiSentiment: "POSITIVE",
+        aiScore: 92,
+        aiSummary: "Cliente VIP con alta satisfacción. Tomador de decisiones.",
+        needsHumanReview: false,
       },
       {
         workspaceId: "demo-workspace",
@@ -56,6 +71,13 @@ function seedDemoData() {
         lastContactAt: new Date(Date.now() - 86400000),
         createdAt: new Date(),
         updatedAt: new Date(),
+        // AI fields
+        aiLabels: ["interested", "urgent", "decision_maker"],
+        aiSegment: "HOT_LEAD",
+        aiSentiment: "VERY_POSITIVE",
+        aiScore: 85,
+        aiSummary: "Lead muy interesado, listo para cerrar. Contactar pronto.",
+        needsHumanReview: false,
       },
       {
         workspaceId: "demo-workspace",
@@ -68,6 +90,76 @@ function seedDemoData() {
         notes: "",
         createdAt: new Date(),
         updatedAt: new Date(),
+        // AI fields
+        aiLabels: ["price_sensitive"],
+        aiSegment: "WARM_LEAD",
+        aiSentiment: "NEUTRAL",
+        aiScore: 55,
+        aiSummary: "Lead tibio, necesita más información sobre precios.",
+        needsHumanReview: false,
+      },
+      {
+        workspaceId: "demo-workspace",
+        firstName: "Ana",
+        lastName: "López",
+        phone: "+52 55 7777 8888",
+        email: "ana@servicios.mx",
+        company: "Servicios Premium",
+        status: "prospect",
+        tags: [],
+        notes: "Expresó frustración con respuesta automática",
+        lastContactAt: new Date(Date.now() - 3600000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // AI fields - needs escalation
+        aiLabels: ["interested"],
+        aiSegment: "SUPPORT_NEEDED",
+        aiSentiment: "FRUSTRATED",
+        aiScore: 60,
+        aiSummary: "Cliente frustrado, solicitó hablar con un humano.",
+        needsHumanReview: true,
+        escalationReason: "FRUSTRATED_CUSTOMER",
+      },
+      {
+        workspaceId: "demo-workspace",
+        firstName: "Pedro",
+        lastName: "Sánchez",
+        phone: "+52 81 3333 2222",
+        email: "pedro@granempresa.com",
+        company: "Gran Empresa SA",
+        status: "prospect",
+        tags: [],
+        notes: "Pedido grande, múltiples ubicaciones",
+        lastContactAt: new Date(Date.now() - 7200000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // AI fields - high value needs attention
+        aiLabels: ["interested", "decision_maker", "urgent"],
+        aiSegment: "HOT_LEAD",
+        aiSentiment: "POSITIVE",
+        aiScore: 90,
+        aiSummary: "Oportunidad de alto valor. Múltiples ubicaciones.",
+        needsHumanReview: true,
+        escalationReason: "HIGH_VALUE",
+      },
+      {
+        workspaceId: "demo-workspace",
+        firstName: "Laura",
+        lastName: "Fernández",
+        phone: "+52 33 1111 0000",
+        company: "StartupTech",
+        status: "lost",
+        tags: [],
+        notes: "Se fue con la competencia",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // AI fields
+        aiLabels: ["competitor_mention", "price_sensitive"],
+        aiSegment: "COLD_LEAD",
+        aiSentiment: "NEGATIVE",
+        aiScore: 20,
+        aiSummary: "Perdido por precio. Mencionó competidor más barato.",
+        needsHumanReview: false,
       },
     ];
 

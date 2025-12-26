@@ -28,6 +28,11 @@ import {
   List,
   Trash2,
   Pencil,
+  AlertTriangle,
+  Sparkles,
+  TrendingUp,
+  Filter,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -46,6 +51,13 @@ export interface Contact {
   commentsCount?: number;
   tasksCount?: number;
   pendingTasksCount?: number;
+  // AI-generated fields
+  aiLabels?: string[];
+  aiSegment?: string;
+  aiSentiment?: string;
+  aiScore?: number;
+  needsHumanReview?: boolean;
+  escalationReason?: string;
 }
 
 interface KanbanColumn {
@@ -85,6 +97,27 @@ interface ContactsKanbanViewProps {
   onViewModeChange: (mode: "kanban" | "table") => void;
 }
 
+// AI Label display names
+const AI_LABEL_NAMES: Record<string, { label: string; color: string }> = {
+  interested: { label: "Interesado", color: "bg-green-100 text-green-700 border-green-200" },
+  price_sensitive: { label: "Precio", color: "bg-amber-100 text-amber-700 border-amber-200" },
+  urgent: { label: "Urgente", color: "bg-red-100 text-red-700 border-red-200" },
+  returning: { label: "Recurrente", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  referral: { label: "Referido", color: "bg-purple-100 text-purple-700 border-purple-200" },
+  competitor_mention: { label: "Competencia", color: "bg-orange-100 text-orange-700 border-orange-200" },
+  decision_maker: { label: "Decisor", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+};
+
+const AI_SEGMENT_NAMES: Record<string, { label: string; color: string }> = {
+  HOT_LEAD: { label: "Lead Caliente", color: "bg-red-500 text-white" },
+  WARM_LEAD: { label: "Lead Tibio", color: "bg-orange-500 text-white" },
+  COLD_LEAD: { label: "Lead Frío", color: "bg-blue-500 text-white" },
+  ACTIVE_CLIENT: { label: "Cliente Activo", color: "bg-green-500 text-white" },
+  AT_RISK: { label: "En Riesgo", color: "bg-yellow-500 text-white" },
+  VIP: { label: "VIP", color: "bg-purple-500 text-white" },
+  SUPPORT_NEEDED: { label: "Necesita Soporte", color: "bg-pink-500 text-white" },
+};
+
 export function ContactsKanbanView({ viewMode, onViewModeChange }: ContactsKanbanViewProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -94,11 +127,21 @@ export function ContactsKanbanView({ viewMode, onViewModeChange }: ContactsKanba
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   
+  // Filter state
+  const [filterLabel, setFilterLabel] = useState<string | null>(null);
+  const [filterSegment, setFilterSegment] = useState<string | null>(null);
+  const [showNeedsReview, setShowNeedsReview] = useState(false);
+  
   // Drag state
   const [draggedContact, setDraggedContact] = useState<Contact | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragImageRef = useRef<HTMLDivElement>(null);
+
+  // Get unique labels from all contacts
+  const allLabels = Array.from(new Set(contacts.flatMap(c => c.aiLabels || [])));
+  const allSegments = Array.from(new Set(contacts.map(c => c.aiSegment).filter(Boolean))) as string[];
+  const needsReviewCount = contacts.filter(c => c.needsHumanReview).length;
 
   // Fetch contacts
   const fetchContacts = useCallback(async () => {
@@ -268,8 +311,30 @@ export function ContactsKanbanView({ viewMode, onViewModeChange }: ContactsKanba
   };
 
   const getContactsByStatus = (status: string) => {
-    return contacts.filter(c => c.status === status);
+    return contacts.filter(c => {
+      // Status filter
+      if (c.status !== status) return false;
+      
+      // Label filter
+      if (filterLabel && !c.aiLabels?.includes(filterLabel)) return false;
+      
+      // Segment filter
+      if (filterSegment && c.aiSegment !== filterSegment) return false;
+      
+      // Needs review filter
+      if (showNeedsReview && !c.needsHumanReview) return false;
+      
+      return true;
+    });
   };
+
+  const clearFilters = () => {
+    setFilterLabel(null);
+    setFilterSegment(null);
+    setShowNeedsReview(false);
+  };
+
+  const hasActiveFilters = filterLabel || filterSegment || showNeedsReview;
 
   if (isLoading) {
     return (
@@ -290,53 +355,132 @@ export function ContactsKanbanView({ viewMode, onViewModeChange }: ContactsKanba
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar contactos..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 bg-muted/50 border-0 focus-visible:ring-1"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 sm:ml-auto">
-          {/* View Toggle - Notion Style */}
-          <div className="flex bg-muted rounded-md p-0.5">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onViewModeChange("kanban")}
-              className={cn(
-                "h-7 px-2.5 rounded-sm transition-all",
-                viewMode === "kanban" 
-                  ? "bg-background shadow-sm text-foreground" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-transparent"
-              )}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onViewModeChange("table")}
-              className={cn(
-                "h-7 px-2.5 rounded-sm transition-all",
-                viewMode === "table" 
-                  ? "bg-background shadow-sm text-foreground" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-transparent"
-              )}
-            >
-              <List className="h-4 w-4" />
-            </Button>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar contactos..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 bg-muted/50 border-0 focus-visible:ring-1"
+            />
           </div>
 
-          <Button onClick={handleAddContact} size="sm" className="h-8">
-            <Plus className="h-4 w-4 mr-1.5" />
-            Nuevo
-          </Button>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            {/* Needs Review Filter */}
+            {needsReviewCount > 0 && (
+              <Button
+                variant={showNeedsReview ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowNeedsReview(!showNeedsReview)}
+                className="h-8 text-xs gap-1.5"
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Requieren atención
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                  {needsReviewCount}
+                </Badge>
+              </Button>
+            )}
+
+            {/* View Toggle - Notion Style */}
+            <div className="flex bg-muted rounded-md p-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onViewModeChange("kanban")}
+                className={cn(
+                  "h-7 px-2.5 rounded-sm transition-all",
+                  viewMode === "kanban" 
+                    ? "bg-background shadow-sm text-foreground" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onViewModeChange("table")}
+                className={cn(
+                  "h-7 px-2.5 rounded-sm transition-all",
+                  viewMode === "table" 
+                    ? "bg-background shadow-sm text-foreground" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                )}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <Button onClick={handleAddContact} size="sm" className="h-8">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Nuevo
+            </Button>
+          </div>
         </div>
+
+        {/* AI Filters Row */}
+        {(allLabels.length > 0 || allSegments.length > 0) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Filtrar por IA:</span>
+            </div>
+
+            {/* Segment filters */}
+            {allSegments.map((segment) => {
+              const segmentInfo = AI_SEGMENT_NAMES[segment] || { label: segment, color: "bg-gray-100 text-gray-700" };
+              return (
+                <button
+                  key={segment}
+                  onClick={() => setFilterSegment(filterSegment === segment ? null : segment)}
+                  className={cn(
+                    "px-2 py-1 rounded-full text-[11px] font-medium transition-all",
+                    filterSegment === segment
+                      ? segmentInfo.color
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  )}
+                >
+                  {segmentInfo.label}
+                </button>
+              );
+            })}
+
+            {/* Label filters */}
+            {allLabels.map((label) => {
+              const labelInfo = AI_LABEL_NAMES[label] || { label: label, color: "bg-gray-100 text-gray-700 border-gray-200" };
+              return (
+                <button
+                  key={label}
+                  onClick={() => setFilterLabel(filterLabel === label ? null : label)}
+                  className={cn(
+                    "px-2 py-1 rounded-full text-[11px] font-medium border transition-all",
+                    filterLabel === label
+                      ? labelInfo.color
+                      : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                  )}
+                >
+                  {labelInfo.label}
+                </button>
+              );
+            })}
+
+            {/* Clear filters */}
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="h-6 px-2 text-xs text-muted-foreground"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Limpiar
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Kanban Board */}
@@ -462,6 +606,8 @@ function ContactCard({
   onEdit,
   onDelete,
 }: ContactCardProps) {
+  const segmentInfo = contact.aiSegment ? AI_SEGMENT_NAMES[contact.aiSegment] : null;
+  
   return (
     <div
       draggable
@@ -473,9 +619,20 @@ function ContactCard({
         "transition-all duration-150",
         "hover:shadow-md hover:border-primary/30",
         "active:scale-[0.98] active:shadow-sm",
-        isDragging && "opacity-40 scale-95 rotate-1"
+        isDragging && "opacity-40 scale-95 rotate-1",
+        contact.needsHumanReview && "ring-2 ring-amber-400 ring-offset-1"
       )}
     >
+      {/* Escalation Banner */}
+      {contact.needsHumanReview && (
+        <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-200 rounded-t-md flex items-center gap-1.5">
+          <AlertTriangle className="h-3 w-3 text-amber-600" />
+          <span className="text-[10px] font-medium text-amber-700">
+            Requiere atención
+          </span>
+        </div>
+      )}
+      
       <div className="p-3">
         <div className="flex items-start gap-2">
           {/* Drag Handle */}
@@ -493,11 +650,19 @@ function ContactCard({
           {/* Avatar & Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <Avatar className="h-7 w-7 shrink-0">
-                <AvatarFallback className="text-[10px] font-medium bg-primary/10 text-primary">
-                  {`${contact.firstName?.[0] || ""}${contact.lastName?.[0] || ""}`.toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-7 w-7 shrink-0">
+                  <AvatarFallback className="text-[10px] font-medium bg-primary/10 text-primary">
+                    {`${contact.firstName?.[0] || ""}${contact.lastName?.[0] || ""}`.toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                {/* AI Score indicator */}
+                {contact.aiScore !== undefined && contact.aiScore >= 70 && (
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green-500 flex items-center justify-center">
+                    <TrendingUp className="h-2 w-2 text-white" />
+                  </div>
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-sm truncate leading-tight">
                   {contact.firstName} {contact.lastName}
@@ -509,6 +674,44 @@ function ContactCard({
                 )}
               </div>
             </div>
+
+            {/* AI Segment Badge */}
+            {segmentInfo && (
+              <div className="mt-2">
+                <span className={cn(
+                  "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                  segmentInfo.color
+                )}>
+                  <Sparkles className="h-2.5 w-2.5 mr-1" />
+                  {segmentInfo.label}
+                </span>
+              </div>
+            )}
+
+            {/* AI Labels */}
+            {contact.aiLabels && contact.aiLabels.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {contact.aiLabels.slice(0, 3).map((label) => {
+                  const labelInfo = AI_LABEL_NAMES[label] || { label, color: "bg-gray-100 text-gray-600 border-gray-200" };
+                  return (
+                    <span
+                      key={label}
+                      className={cn(
+                        "px-1.5 py-0.5 rounded border text-[9px] font-medium",
+                        labelInfo.color
+                      )}
+                    >
+                      {labelInfo.label}
+                    </span>
+                  );
+                })}
+                {contact.aiLabels.length > 3 && (
+                  <span className="px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                    +{contact.aiLabels.length - 3}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Contact Details */}
             {(contact.phone || contact.email) && (
@@ -529,8 +732,18 @@ function ContactCard({
             )}
 
             {/* Activity Badges */}
-            {((contact.commentsCount ?? 0) > 0 || (contact.tasksCount ?? 0) > 0) && (
+            {((contact.commentsCount ?? 0) > 0 || (contact.tasksCount ?? 0) > 0 || contact.aiScore !== undefined) && (
               <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+                {contact.aiScore !== undefined && (
+                  <span className={cn(
+                    "flex items-center gap-1 px-1.5 py-0.5 rounded font-medium",
+                    contact.aiScore >= 70 ? "bg-green-100 text-green-700" :
+                    contact.aiScore >= 40 ? "bg-amber-100 text-amber-700" :
+                    "bg-red-100 text-red-700"
+                  )}>
+                    {contact.aiScore}
+                  </span>
+                )}
                 {(contact.commentsCount ?? 0) > 0 && (
                   <span className="flex items-center gap-1 bg-muted/50 px-1.5 py-0.5 rounded">
                     <MessageSquare className="h-3 w-3" />
