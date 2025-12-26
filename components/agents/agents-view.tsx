@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { UI } from "@/lib/copy/uiStrings";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -11,23 +11,40 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Bot, MessageSquare, Calendar, Tag, ClipboardList, Play, Settings } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Bot, MoreVertical, Pencil, Trash2, Power, PowerOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AgentEditor } from "@/components/agents/agent-editor";
+import { toast } from "sonner";
 
 interface Agent {
   id: string;
   name: string;
   template: "sales" | "support" | "collections" | "custom";
   tone: string;
+  language?: string;
   isActive: boolean;
-  voiceName?: string;
+  voiceId?: string;
   conversationCount: number;
+  createdAt: string;
 }
-
-const mockAgents: Agent[] = [];
 
 const templateConfig = {
   sales: { label: UI.agents.templates.sales, color: "bg-green-500/10 text-green-700" },
@@ -36,16 +53,38 @@ const templateConfig = {
   custom: { label: UI.agents.templates.custom, color: "bg-purple-500/10 text-purple-700" },
 };
 
-const toolIcons = {
-  sendWhatsapp: MessageSquare,
-  scheduleMeeting: Calendar,
-  createTask: ClipboardList,
-  tagContact: Tag,
+const toneLabels: Record<string, string> = {
+  professional: "Profesional",
+  friendly: "Amigable",
+  formal: "Formal",
+  casual: "Casual",
 };
 
 export function AgentsView() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
+
+  // Fetch agents
+  const fetchAgents = useCallback(async () => {
+    try {
+      const response = await fetch("/api/agents");
+      const data = await response.json();
+      if (data.success) {
+        setAgents(data.agents);
+      }
+    } catch (error) {
+      console.error("Error fetching agents:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
 
   const handleCreateAgent = () => {
     setEditingAgent(null);
@@ -57,10 +96,70 @@ export function AgentsView() {
     setIsEditorOpen(true);
   };
 
+  const handleDeleteAgent = async () => {
+    if (!deleteAgent) return;
+
+    try {
+      const response = await fetch(`/api/agents?id=${deleteAgent.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success("Agente eliminado");
+        fetchAgents();
+      } else {
+        toast.error(data.error || "Error al eliminar");
+      }
+    } catch (error) {
+      console.error("Error deleting agent:", error);
+      toast.error("Error al eliminar el agente");
+    } finally {
+      setDeleteAgent(null);
+    }
+  };
+
+  const handleToggleActive = async (agent: Agent) => {
+    try {
+      const response = await fetch("/api/agents", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: agent.id,
+          isActive: !agent.isActive,
+        }),
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(agent.isActive ? "Agente desactivado" : "Agente activado");
+        fetchAgents();
+      } else {
+        toast.error(data.error || "Error al actualizar");
+      }
+    } catch (error) {
+      console.error("Error toggling agent:", error);
+      toast.error("Error al actualizar el agente");
+    }
+  };
+
+  const handleEditorClose = () => {
+    setIsEditorOpen(false);
+    fetchAgents(); // Refresh list
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Empty State or Grid */}
-      {mockAgents.length === 0 ? (
+      {agents.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -85,52 +184,84 @@ export function AgentsView() {
             </Button>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {mockAgents.map((agent) => (
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {agents.map((agent) => (
               <Card
                 key={agent.id}
                 className={cn(
-                  "cursor-pointer transition-all hover:shadow-md",
+                  "transition-all hover:shadow-md",
                   !agent.isActive && "opacity-60"
                 )}
-                onClick={() => handleEditAgent(agent)}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                         <Bot className="h-5 w-5 text-primary" />
                       </div>
-                      <div>
-                        <CardTitle className="text-base">{agent.name}</CardTitle>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold truncate">{agent.name}</h3>
                         <Badge
                           variant="secondary"
-                          className={cn("mt-1 text-xs", templateConfig[agent.template].color)}
+                          className={cn("mt-1 text-xs", templateConfig[agent.template]?.color)}
                         >
-                          {templateConfig[agent.template].label}
+                          {templateConfig[agent.template]?.label || agent.template}
                         </Badge>
                       </div>
                     </div>
-                    <Badge variant={agent.isActive ? "default" : "secondary"}>
-                      {agent.isActive ? UI.common.active : UI.common.inactive}
-                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEditAgent(agent)}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleToggleActive(agent)}>
+                          {agent.isActive ? (
+                            <>
+                              <PowerOff className="h-4 w-4 mr-2" />
+                              Desactivar
+                            </>
+                          ) : (
+                            <>
+                              <Power className="h-4 w-4 mr-2" />
+                              Activar
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setDeleteAgent(agent)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 text-sm text-muted-foreground">
                     <div className="flex items-center justify-between">
-                      <span>Tono:</span>
-                      <span className="font-medium text-foreground">{agent.tone}</span>
+                      <span>Estado:</span>
+                      <Badge variant={agent.isActive ? "default" : "secondary"} className="text-xs">
+                        {agent.isActive ? UI.common.active : UI.common.inactive}
+                      </Badge>
                     </div>
-                    {agent.voiceName && (
-                      <div className="flex items-center justify-between">
-                        <span>Voz:</span>
-                        <span className="font-medium text-foreground">{agent.voiceName}</span>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between">
+                      <span>Tono:</span>
+                      <span className="font-medium text-foreground">
+                        {toneLabels[agent.tone] || agent.tone}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between">
                       <span>Conversaciones:</span>
-                      <span className="font-medium text-foreground">{agent.conversationCount}</span>
+                      <span className="font-medium text-foreground">{agent.conversationCount || 0}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -153,12 +284,33 @@ export function AgentsView() {
           </DialogHeader>
           <AgentEditor
             agent={editingAgent}
-            onSave={() => setIsEditorOpen(false)}
+            onSave={handleEditorClose}
             onCancel={() => setIsEditorOpen(false)}
           />
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteAgent} onOpenChange={() => setDeleteAgent(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar agente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. El agente &quot;{deleteAgent?.name}&quot; será eliminado
+              permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAgent}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-

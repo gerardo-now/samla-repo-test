@@ -162,6 +162,8 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
     );
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -170,28 +172,41 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
       return;
     }
 
-    // TODO: Save agent to API with language
-    const agentData = {
-      name,
-      template,
-      tone,
-      language, // This is sent to the API
-      voiceId,
-      enabledTools,
-      goals,
-      isActive,
-    };
+    setIsSaving(true);
 
-    console.log("Saving agent with language:", agentData);
+    try {
+      const agentData = {
+        id: agent?.id,
+        name: name.trim(),
+        template,
+        tone,
+        language,
+        voiceId,
+        enabledTools,
+        goals,
+        isActive,
+      };
 
-    // In production:
-    // await fetch("/api/agents", {
-    //   method: agent ? "PUT" : "POST",
-    //   body: JSON.stringify(agentData),
-    // });
+      const response = await fetch("/api/agents", {
+        method: agent ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(agentData),
+      });
 
-    toast.success(agent ? "Agente actualizado" : "Agente creado");
-    onSave();
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(agent ? "Agente actualizado" : "Agente creado exitosamente");
+        onSave();
+      } else {
+        toast.error(data.error || "Error al guardar el agente");
+      }
+    } catch (error) {
+      console.error("Error saving agent:", error);
+      toast.error("Error al guardar el agente");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -369,10 +384,19 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
 
       {/* Actions */}
       <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving} className="w-full sm:w-auto">
           {UI.common.cancel}
         </Button>
-        <Button type="submit" className="w-full sm:w-auto">{UI.common.save}</Button>
+        <Button type="submit" disabled={isSaving} className="w-full sm:w-auto">
+          {isSaving ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Guardando...
+            </>
+          ) : (
+            UI.common.save
+          )}
+        </Button>
       </div>
     </form>
   );
