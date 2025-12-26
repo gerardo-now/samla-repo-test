@@ -155,7 +155,16 @@ GOOGLE_REDIRECT_URI=https://tu-app.railway.app/api/auth/google/callback
 ### 🔍 APOLLO.IO - Leads B2B (Opcional)
 ```env
 # Obtén en: https://app.apollo.io → Settings → API
+# Referencia: https://docs.apollo.io/reference/people-api-search
 APOLLO_API_KEY=your_apollo_api_key
+```
+
+### 🗺️ APIFY - Búsqueda Local/Maps (Opcional)
+```env
+# Obtén en: https://console.apify.com → Settings → Integrations → API
+# Usa el actor: compass/crawler-google-places
+# Referencia: https://apify.com/compass/crawler-google-places
+APIFY_API_TOKEN=your_apify_api_token
 ```
 
 ### 📦 S3 STORAGE - Archivos (Opcional)
