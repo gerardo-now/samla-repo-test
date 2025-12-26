@@ -50,13 +50,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Search, Plus, MoreHorizontal, Phone, Mail, Users, Loader2, Pencil, Trash2, LayoutGrid, List } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { ContactsKanbanView, Contact } from "./contacts-kanban-view";
 import { ContactDetailPanel } from "./contact-detail-panel";
 
 const statusConfig = {
-  prospect: { label: UI.contacts.status.prospect, variant: "secondary" as const },
-  client: { label: UI.contacts.status.client, variant: "default" as const },
-  lost: { label: UI.contacts.status.lost, variant: "destructive" as const },
+  prospect: { label: UI.contacts.status.prospect, variant: "secondary" as const, color: "bg-amber-500" },
+  client: { label: UI.contacts.status.client, variant: "default" as const, color: "bg-emerald-500" },
+  lost: { label: UI.contacts.status.lost, variant: "destructive" as const, color: "bg-rose-500" },
 };
 
 export function ContactsView() {
@@ -104,11 +105,13 @@ export function ContactsView() {
   }, [statusFilter, searchQuery]);
 
   useEffect(() => {
-    const debounce = setTimeout(() => {
-      fetchContacts();
-    }, 300);
-    return () => clearTimeout(debounce);
-  }, [fetchContacts]);
+    if (viewMode === "table") {
+      const debounce = setTimeout(() => {
+        fetchContacts();
+      }, 300);
+      return () => clearTimeout(debounce);
+    }
+  }, [fetchContacts, viewMode]);
 
   // If in Kanban mode, delegate to that component
   if (viewMode === "kanban") {
@@ -222,24 +225,37 @@ export function ContactsView() {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={UI.common.search}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-10"
+            className="pl-9 h-9 bg-muted/50 border-0 focus-visible:ring-1"
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        {/* Status Filter Pills */}
+        <div className="flex gap-1.5 flex-wrap">
           {["all", "prospect", "client", "lost"].map((status) => (
             <Button
               key={status}
-              variant={statusFilter === status ? "default" : "outline"}
+              variant="ghost"
               size="sm"
               onClick={() => setStatusFilter(status)}
+              className={cn(
+                "h-7 px-2.5 text-xs rounded-full transition-all",
+                statusFilter === status 
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                  : "bg-muted hover:bg-muted/80 text-muted-foreground"
+              )}
             >
+              {status !== "all" && (
+                <span className={cn(
+                  "w-2 h-2 rounded-full mr-1.5",
+                  statusConfig[status as keyof typeof statusConfig].color
+                )} />
+              )}
               {status === "all"
                 ? UI.common.all
                 : statusConfig[status as keyof typeof statusConfig].label}
@@ -248,45 +264,48 @@ export function ContactsView() {
         </div>
 
         <div className="flex items-center gap-2 sm:ml-auto">
-          <div className="flex border rounded-lg overflow-hidden">
+          {/* View Toggle */}
+          <div className="flex bg-muted rounded-md p-0.5">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setViewMode("kanban")}
-              className="rounded-none"
+              className="h-7 px-2.5 rounded-sm transition-all text-muted-foreground hover:text-foreground hover:bg-transparent"
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>
             <Button
-              variant="default"
+              variant="ghost"
               size="sm"
               onClick={() => setViewMode("table")}
-              className="rounded-none"
+              className="h-7 px-2.5 rounded-sm transition-all bg-background shadow-sm text-foreground"
             >
               <List className="h-4 w-4" />
             </Button>
           </div>
 
-          <Button onClick={() => handleOpenEditor()}>
-            <Plus className="h-4 w-4 mr-2" />
-            {UI.contacts.addNew}
+          <Button onClick={() => handleOpenEditor()} size="sm" className="h-8">
+            <Plus className="h-4 w-4 mr-1.5" />
+            Nuevo
           </Button>
         </div>
       </div>
 
       {/* Contacts Table */}
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardContent className="p-0">
           {contacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                <Users className="h-6 w-6 text-muted-foreground" />
+              </div>
               <p className="font-medium text-muted-foreground">
                 {searchQuery || statusFilter !== "all" ? UI.common.noResults : "Sin contactos"}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 Agrega tu primer cliente para empezar
               </p>
-              <Button className="mt-4" onClick={() => handleOpenEditor()}>
+              <Button className="mt-4" size="sm" onClick={() => handleOpenEditor()}>
                 <Plus className="h-4 w-4 mr-2" />
                 {UI.contacts.addNew}
               </Button>
@@ -295,31 +314,31 @@ export function ContactsView() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>{UI.contacts.fields.name}</TableHead>
-                    <TableHead className="hidden md:table-cell">{UI.contacts.fields.phone}</TableHead>
-                    <TableHead className="hidden lg:table-cell">{UI.contacts.fields.email}</TableHead>
-                    <TableHead className="hidden xl:table-cell">{UI.contacts.fields.company}</TableHead>
-                    <TableHead>{UI.contacts.fields.status}</TableHead>
-                    <TableHead className="w-12"></TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="font-medium">{UI.contacts.fields.name}</TableHead>
+                    <TableHead className="hidden md:table-cell font-medium">{UI.contacts.fields.phone}</TableHead>
+                    <TableHead className="hidden lg:table-cell font-medium">{UI.contacts.fields.email}</TableHead>
+                    <TableHead className="hidden xl:table-cell font-medium">{UI.contacts.fields.company}</TableHead>
+                    <TableHead className="font-medium">{UI.contacts.fields.status}</TableHead>
+                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {contacts.map((contact) => (
                     <TableRow 
                       key={contact.id} 
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer group"
                       onClick={() => handleContactClick(contact)}
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-xs">
+                            <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
                               {`${contact.firstName?.[0] || ""}${contact.lastName?.[0] || ""}`.toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <span className="font-medium">
+                            <span className="font-medium text-sm">
                               {contact.firstName} {contact.lastName}
                             </span>
                             <div className="md:hidden text-xs text-muted-foreground">
@@ -330,39 +349,53 @@ export function ContactsView() {
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {contact.phone && (
-                          <div className="flex items-center gap-1 text-sm">
-                            <Phone className="h-3 w-3" />
+                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <Phone className="h-3.5 w-3.5" />
                             {contact.phone}
                           </div>
                         )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         {contact.email && (
-                          <div className="flex items-center gap-1 text-sm">
-                            <Mail className="h-3 w-3" />
+                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <Mail className="h-3.5 w-3.5" />
                             {contact.email}
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="hidden xl:table-cell">{contact.company}</TableCell>
+                      <TableCell className="hidden xl:table-cell text-sm text-muted-foreground">
+                        {contact.company}
+                      </TableCell>
                       <TableCell>
-                        <Badge variant={statusConfig[contact.status].variant}>
+                        <Badge 
+                          variant="secondary"
+                          className={cn(
+                            "text-xs font-normal",
+                            contact.status === "client" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+                            contact.status === "prospect" && "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+                            contact.status === "lost" && "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
+                          )}
+                        >
                           {statusConfig[contact.status].label}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="w-36">
                             <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation();
                               handleOpenEditor(contact);
                             }}>
-                              <Pencil className="h-4 w-4 mr-2" />
+                              <Pencil className="h-3.5 w-3.5 mr-2" />
                               {UI.common.edit}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -373,7 +406,7 @@ export function ContactsView() {
                                 setDeleteContact(contact);
                               }}
                             >
-                              <Trash2 className="h-4 w-4 mr-2" />
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
                               {UI.common.delete}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
