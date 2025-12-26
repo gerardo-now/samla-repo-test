@@ -18,7 +18,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -30,6 +29,7 @@ import {
   SheetTrigger,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useSuperAdmin } from "@/hooks/use-super-admin";
 
 const mainNavItems = [
   { href: "/home", icon: Home, label: UI.nav.home },
@@ -42,15 +42,15 @@ const mainNavItems = [
   { href: "/triggers", icon: Zap, label: UI.nav.triggers },
 ];
 
-const bottomNavItems = [
-  { href: "/settings", icon: Settings, label: UI.nav.settings },
-  { href: "/admin", icon: Shield, label: UI.nav.admin },
-];
+// Settings is always visible, Admin only for SAMLA team
+const settingsItem = { href: "/settings", icon: Settings, label: UI.nav.settings };
+const adminItem = { href: "/admin", icon: Shield, label: UI.nav.admin };
 
 // Mobile Sidebar
 function MobileSidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const { isSuperAdmin } = useSuperAdmin();
 
   // Close sheet on navigation
   useEffect(() => {
@@ -112,25 +112,37 @@ function MobileSidebar() {
 
           {/* Bottom Navigation */}
           <nav className="px-2 py-4 space-y-1">
-            {bottomNavItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  )}
-                >
-                  <item.icon className="h-5 w-5 shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
+            {/* Settings - always visible */}
+            <Link
+              href={settingsItem.href}
+              onClick={() => setOpen(false)}
+              className={cn(
+                "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors",
+                pathname.startsWith(settingsItem.href)
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <settingsItem.icon className="h-5 w-5 shrink-0" />
+              <span>{settingsItem.label}</span>
+            </Link>
+
+            {/* Admin - ONLY for SAMLA internal team */}
+            {isSuperAdmin && (
+              <Link
+                href={adminItem.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors",
+                  pathname.startsWith(adminItem.href)
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <adminItem.icon className="h-5 w-5 shrink-0" />
+                <span>{adminItem.label}</span>
+              </Link>
+            )}
           </nav>
         </div>
       </SheetContent>
@@ -142,6 +154,7 @@ function MobileSidebar() {
 function DesktopSidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { isSuperAdmin } = useSuperAdmin();
 
   return (
     <aside
@@ -201,25 +214,37 @@ function DesktopSidebar() {
 
       {/* Bottom Navigation */}
       <nav className="px-2 py-4 space-y-1">
-        {bottomNavItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-              )}
-              title={collapsed ? item.label : undefined}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
-            </Link>
-          );
-        })}
+        {/* Settings - always visible */}
+        <Link
+          href={settingsItem.href}
+          className={cn(
+            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+            pathname.startsWith(settingsItem.href)
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          )}
+          title={collapsed ? settingsItem.label : undefined}
+        >
+          <settingsItem.icon className="h-5 w-5 shrink-0" />
+          {!collapsed && <span>{settingsItem.label}</span>}
+        </Link>
+
+        {/* Admin - ONLY for SAMLA internal team */}
+        {isSuperAdmin && (
+          <Link
+            href={adminItem.href}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+              pathname.startsWith(adminItem.href)
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+            title={collapsed ? adminItem.label : undefined}
+          >
+            <adminItem.icon className="h-5 w-5 shrink-0" />
+            {!collapsed && <span>{adminItem.label}</span>}
+          </Link>
+        )}
       </nav>
     </aside>
   );
