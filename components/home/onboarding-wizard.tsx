@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -35,12 +36,15 @@ import {
   Mail,
   Loader2,
   Globe,
+  MapPin,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { COUNTRIES, BILLING_REGIONS, requiresEnterprise, getSingleRegion, type BillingRegion } from "@/lib/billing/regions";
 
 // Step types
-type StepType = "welcome" | "language" | "workspace" | "team" | "ready";
+type StepType = "welcome" | "language" | "workspace" | "region" | "team" | "ready";
 
 interface TeamMember {
   email: string;
@@ -154,6 +158,14 @@ const uiStrings: Record<string, Record<string, string>> = {
     errorDuplicate: "Este correo ya fue agregado",
     successWelcome: "¡Bienvenido a SAMLA!",
     errorGeneral: "Hubo un error. Por favor intenta de nuevo.",
+    regionTitle: "¿Dónde opera tu empresa?",
+    regionDesc: "Selecciona los países donde atiendes clientes. Esto determina tu plan de facturación.",
+    selectCountries: "Selecciona uno o más países",
+    selectedCountries: "países seleccionados",
+    multiRegionWarning: "Operas en múltiples regiones",
+    multiRegionDesc: "Para operar en más de una región necesitas el plan Enterprise. Te contactaremos para configurar tu cuenta.",
+    contactEnterprise: "Contactar ventas",
+    errorSelectCountry: "Por favor selecciona al menos un país",
   },
   en: {
     welcomeTitle: "Welcome to SAMLA!",
@@ -193,6 +205,14 @@ const uiStrings: Record<string, Record<string, string>> = {
     errorDuplicate: "This email was already added",
     successWelcome: "Welcome to SAMLA!",
     errorGeneral: "An error occurred. Please try again.",
+    regionTitle: "Where does your company operate?",
+    regionDesc: "Select the countries where you serve customers. This determines your billing plan.",
+    selectCountries: "Select one or more countries",
+    selectedCountries: "countries selected",
+    multiRegionWarning: "You operate in multiple regions",
+    multiRegionDesc: "To operate in more than one region you need the Enterprise plan. We'll contact you to set up your account.",
+    contactEnterprise: "Contact sales",
+    errorSelectCountry: "Please select at least one country",
   },
   pt: {
     welcomeTitle: "Bem-vindo ao SAMLA!",
@@ -232,6 +252,14 @@ const uiStrings: Record<string, Record<string, string>> = {
     errorDuplicate: "Este email já foi adicionado",
     successWelcome: "Bem-vindo ao SAMLA!",
     errorGeneral: "Ocorreu um erro. Por favor, tente novamente.",
+    regionTitle: "Onde sua empresa opera?",
+    regionDesc: "Selecione os países onde você atende clientes. Isso determina seu plano de faturamento.",
+    selectCountries: "Selecione um ou mais países",
+    selectedCountries: "países selecionados",
+    multiRegionWarning: "Você opera em múltiplas regiões",
+    multiRegionDesc: "Para operar em mais de uma região você precisa do plano Enterprise. Entraremos em contato para configurar sua conta.",
+    contactEnterprise: "Contatar vendas",
+    errorSelectCountry: "Por favor, selecione pelo menos um país",
   },
 };
 
@@ -248,6 +276,10 @@ export function OnboardingWizard() {
   const [industry, setIndustry] = useState("");
   const [timezone, setTimezone] = useState("America/Mexico_City");
 
+  // Region/Country selection
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
+  const [showEnterpriseRedirect, setShowEnterpriseRedirect] = useState(false);
+
   // Team invitations
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [newEmail, setNewEmail] = useState("");
@@ -256,6 +288,10 @@ export function OnboardingWizard() {
   // Get UI strings for current language
   const t = uiStrings[language] || uiStrings.es;
   const currentIndustries = industries[language] || industries.es;
+
+  // Check if multiple regions selected -> Enterprise required
+  const isMultiRegion = requiresEnterprise(selectedCountries);
+  const billingRegion = getSingleRegion(selectedCountries);
 
   useEffect(() => {
     // Check if user needs onboarding
@@ -266,7 +302,7 @@ export function OnboardingWizard() {
     }
   }, []);
 
-  const steps: StepType[] = ["welcome", "language", "workspace", "team", "ready"];
+  const steps: StepType[] = ["welcome", "language", "workspace", "region", "team", "ready"];
   const currentStepIndex = steps.indexOf(currentStep);
 
   const handleNext = async () => {
@@ -281,6 +317,18 @@ export function OnboardingWizard() {
       }
     }
 
+    if (currentStep === "region") {
+      if (selectedCountries.length === 0) {
+        toast.error(t.errorSelectCountry);
+        return;
+      }
+      // If multiple regions, show Enterprise redirect
+      if (isMultiRegion) {
+        setShowEnterpriseRedirect(true);
+        return;
+      }
+    }
+
     if (currentStep === "ready") {
       await handleComplete();
       return;
@@ -290,6 +338,25 @@ export function OnboardingWizard() {
     if (nextIndex < steps.length) {
       setCurrentStep(steps[nextIndex]);
     }
+  };
+
+  const toggleCountry = (countryCode: string) => {
+    setSelectedCountries(prev => 
+      prev.includes(countryCode)
+        ? prev.filter(c => c !== countryCode)
+        : [...prev, countryCode]
+    );
+  };
+
+  const handleEnterpriseContact = () => {
+    // Open email or contact form
+    window.open("mailto:enterprise@samla.io?subject=Enterprise%20Plan%20-%20Multi-Region", "_blank");
+    toast.success(language === "es" 
+      ? "Te contactaremos pronto" 
+      : language === "pt" 
+      ? "Entraremos em contato em breve"
+      : "We'll contact you soon"
+    );
   };
 
   const handleBack = () => {
@@ -337,7 +404,9 @@ export function OnboardingWizard() {
           name: workspaceName,
           industry,
           timezone,
-          language, // Include language in workspace setup
+          language,
+          countries: selectedCountries,
+          billingRegion: billingRegion || "LATAM",
         }),
       });
 
@@ -510,6 +579,91 @@ export function OnboardingWizard() {
           </div>
         );
 
+      case "region":
+        // Group countries by region for display
+        const countriesByRegion = Object.entries(BILLING_REGIONS).map(([key, region]) => ({
+          region: key as BillingRegion,
+          name: language === "es" ? region.nameEs : region.name,
+          countries: COUNTRIES.filter(c => c.region === key),
+        }));
+
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <div className="flex justify-center mb-4">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                  <MapPin className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600" />
+                </div>
+              </div>
+              <DialogTitle className="text-lg sm:text-xl mb-2">{t.regionTitle}</DialogTitle>
+              <DialogDescription className="text-sm">
+                {t.regionDesc}
+              </DialogDescription>
+            </div>
+
+            {/* Multi-region warning */}
+            {isMultiRegion && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-amber-800">{t.multiRegionWarning}</p>
+                    <p className="text-sm text-amber-700 mt-1">{t.multiRegionDesc}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Selected countries badge */}
+            {selectedCountries.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="secondary" className="text-sm">
+                  {selectedCountries.length} {t.selectedCountries}
+                </Badge>
+                {billingRegion && !isMultiRegion && (
+                  <Badge variant="outline" className="text-sm">
+                    {language === "es" ? BILLING_REGIONS[billingRegion].nameEs : BILLING_REGIONS[billingRegion].name}
+                  </Badge>
+                )}
+              </div>
+            )}
+
+            {/* Countries by region */}
+            <div className="space-y-4 max-h-[280px] overflow-y-auto pr-2">
+              {countriesByRegion.map(({ region, name, countries }) => (
+                <div key={region}>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                    {name}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {countries.slice(0, 8).map((country) => (
+                      <button
+                        key={country.code}
+                        type="button"
+                        onClick={() => toggleCountry(country.code)}
+                        className={cn(
+                          "flex items-center gap-2 p-2.5 rounded-lg border text-left text-sm transition-all",
+                          selectedCountries.includes(country.code)
+                            ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                            : "border-border hover:border-primary/40 hover:bg-muted/30"
+                        )}
+                      >
+                        <Checkbox
+                          checked={selectedCountries.includes(country.code)}
+                          className="pointer-events-none"
+                        />
+                        <span className="truncate">
+                          {language === "es" ? country.nameEs : country.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
       case "team":
         return (
           <div className="space-y-6">
@@ -630,6 +784,12 @@ export function OnboardingWizard() {
                   {systemLanguages.find(l => l.value === language)?.label}
                 </p>
               </div>
+              <div className="flex items-center gap-3">
+                <MapPin className="h-5 w-5 text-muted-foreground shrink-0" />
+                <p className="text-sm">
+                  {selectedCountries.length} {t.selectedCountries} · {billingRegion && (language === "es" ? BILLING_REGIONS[billingRegion].nameEs : BILLING_REGIONS[billingRegion].name)}
+                </p>
+              </div>
               {teamMembers.length > 0 && (
                 <div className="flex items-center gap-3">
                   <Users className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -697,24 +857,32 @@ export function OnboardingWizard() {
             </Button>
           )}
 
-          <Button onClick={handleNext} disabled={isLoading} className="w-full sm:w-auto order-1 sm:order-3">
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {t.creating}
-              </>
-            ) : currentStep === "ready" ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                {t.startUsing}
-              </>
-            ) : (
-              <>
-                {t.continue}
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </>
-            )}
-          </Button>
+          {/* Enterprise contact button for multi-region */}
+          {currentStep === "region" && isMultiRegion ? (
+            <Button onClick={handleEnterpriseContact} className="w-full sm:w-auto order-1 sm:order-3">
+              {t.contactEnterprise}
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          ) : (
+            <Button onClick={handleNext} disabled={isLoading} className="w-full sm:w-auto order-1 sm:order-3">
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {t.creating}
+                </>
+              ) : currentStep === "ready" ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  {t.startUsing}
+                </>
+              ) : (
+                <>
+                  {t.continue}
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </>
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
