@@ -49,9 +49,9 @@ interface TeamMember {
 
 // Supported system languages
 const systemLanguages = [
-  { value: "es", label: "Español", flag: "🇲🇽" },
-  { value: "en", label: "English", flag: "🇺🇸" },
-  { value: "pt", label: "Português", flag: "🇧🇷" },
+  { value: "es", label: "Español" },
+  { value: "en", label: "English" },
+  { value: "pt", label: "Português" },
 ];
 
 // Industries (multilingual)
@@ -431,16 +431,15 @@ export function OnboardingWizard() {
                   key={lang.value}
                   onClick={() => setLanguage(lang.value)}
                   className={cn(
-                    "flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
+                    "flex items-center justify-between p-4 rounded-xl border transition-all text-left",
                     language === lang.value
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                      : "border-border hover:border-primary/40 hover:bg-muted/30"
                   )}
                 >
-                  <span className="text-2xl sm:text-3xl">{lang.flag}</span>
-                  <span className="font-medium text-sm sm:text-base">{lang.label}</span>
+                  <span className="font-medium">{lang.label}</span>
                   {language === lang.value && (
-                    <CheckCircle2 className="h-5 w-5 text-primary ml-auto" />
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
                   )}
                 </button>
               ))}

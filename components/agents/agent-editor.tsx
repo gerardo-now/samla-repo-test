@@ -46,19 +46,18 @@ const tones = [
 ];
 
 // Agent languages (for AI responses)
-// These are the languages the agent will speak/respond in
 const agentLanguages = [
-  { value: "es-MX", label: "Español (México)", flag: "🇲🇽" },
-  { value: "es-ES", label: "Español (España)", flag: "🇪🇸" },
-  { value: "es-AR", label: "Español (Argentina)", flag: "🇦🇷" },
-  { value: "es-CO", label: "Español (Colombia)", flag: "🇨🇴" },
-  { value: "en-US", label: "English (US)", flag: "🇺🇸" },
-  { value: "en-GB", label: "English (UK)", flag: "🇬🇧" },
-  { value: "pt-BR", label: "Português (Brasil)", flag: "🇧🇷" },
-  { value: "pt-PT", label: "Português (Portugal)", flag: "🇵🇹" },
-  { value: "fr-FR", label: "Français", flag: "🇫🇷" },
-  { value: "de-DE", label: "Deutsch", flag: "🇩🇪" },
-  { value: "it-IT", label: "Italiano", flag: "🇮🇹" },
+  { value: "es-MX", label: "Español — México" },
+  { value: "es-ES", label: "Español — España" },
+  { value: "es-AR", label: "Español — Argentina" },
+  { value: "es-CO", label: "Español — Colombia" },
+  { value: "en-US", label: "English — US" },
+  { value: "en-GB", label: "English — UK" },
+  { value: "pt-BR", label: "Português — Brasil" },
+  { value: "pt-PT", label: "Português — Portugal" },
+  { value: "fr-FR", label: "Français" },
+  { value: "de-DE", label: "Deutsch" },
+  { value: "it-IT", label: "Italiano" },
 ];
 
 const tools = [
@@ -256,10 +255,7 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
             <SelectContent>
               {agentLanguages.map((lang) => (
                 <SelectItem key={lang.value} value={lang.value}>
-                  <span className="flex items-center gap-2">
-                    <span>{lang.flag}</span>
-                    <span>{lang.label}</span>
-                  </span>
+                  {lang.label}
                 </SelectItem>
               ))}
             </SelectContent>
