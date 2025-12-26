@@ -65,7 +65,8 @@ export const env = {
   S3_SECRET_ACCESS_KEY: getEnv("S3_SECRET_ACCESS_KEY") || getEnv("AWS_SECRET_ACCESS_KEY"),
   S3_ENDPOINT: getEnv("S3_ENDPOINT"),
 
-  // Super Admin
+  // Super Admin - emails adicionales que pueden acceder al panel de admin
+  // Los dominios @mysamla.com y @ghyperion.com ya tienen acceso automático
   SUPER_ADMIN_EMAILS: getEnv("SUPER_ADMIN_EMAILS", "").split(",").filter(Boolean),
 };
 

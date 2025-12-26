@@ -4,7 +4,7 @@
  * This module handles authorization for SAMLA internal employees only.
  * The Global Admin panel is NOT accessible to regular customers.
  * 
- * IMPORTANT: Only SAMLA team members with @samla.io emails or explicitly
+ * IMPORTANT: Only SAMLA team members with approved email domains or explicitly
  * whitelisted users can access the admin panel.
  * 
  * Customers NEVER see the admin panel. It's for SAMLA operations only:
@@ -17,17 +17,15 @@
 
 // SAMLA internal domains - only these can be super admins
 const SAMLA_DOMAINS = [
-  "samla.io",
-  "samla.com",
-  "samla.mx",
-  "samla.co",
-  // Add more internal domains as needed
+  "mysamla.com",
+  "ghyperion.com",
 ];
 
 // Explicitly whitelisted super admin emails (for founders/early team)
-// Configure via environment variable for security
+// Configure via SUPER_ADMIN_EMAILS environment variable for security
+// Example: "founder@gmail.com,cto@outlook.com"
 const WHITELISTED_EMAILS: string[] = (() => {
-  const envEmails = process.env.SAMLA_ADMIN_EMAILS;
+  const envEmails = process.env.SUPER_ADMIN_EMAILS || process.env.SAMLA_ADMIN_EMAILS;
   if (!envEmails) return [];
   return envEmails.split(",").map(e => e.toLowerCase().trim()).filter(Boolean);
 })();
