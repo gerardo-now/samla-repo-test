@@ -408,12 +408,12 @@ export function PhoneNumbersSettings() {
 
             <div className="space-y-2">
               <Label>Agente de IA</Label>
-              <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+              <Select value={selectedAgentId || "none"} onValueChange={(v) => setSelectedAgentId(v === "none" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona un agente" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">
+                  <SelectItem value="none">
                     <span className="text-muted-foreground">Sin agente (no contestar)</span>
                   </SelectItem>
                   {agents.map((agent) => (
