@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { LiveModeToggle } from "@/components/layout/live-mode-toggle";
 import {
   Sheet,
@@ -51,10 +51,16 @@ function MobileSidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { isSuperAdmin } = useSuperAdmin();
+  const prevPathname = useRef(pathname);
 
   // Close sheet on navigation
   useEffect(() => {
-    setOpen(false);
+    if (prevPathname.current !== pathname) {
+      prevPathname.current = pathname;
+      // Schedule close for next tick to avoid cascading renders
+      const timer = setTimeout(() => setOpen(false), 0);
+      return () => clearTimeout(timer);
+    }
   }, [pathname]);
 
   return (
