@@ -9,6 +9,15 @@ import { NextRequest, NextResponse } from "next/server";
 // In-memory storage for demo (in production, use Prisma)
 const agents: Map<string, AgentData> = new Map();
 
+interface TransferConfig {
+  enabled: boolean;
+  type: "phone" | "agent" | "queue";
+  destination?: string; // Phone number or agent ID
+  destinationName?: string;
+  conditions?: string[]; // When to transfer: "escalation", "request", "after_hours", etc.
+  message?: string; // Message before transfer
+}
+
 interface AgentData {
   id: string;
   workspaceId: string;
@@ -21,6 +30,26 @@ interface AgentData {
   enabledTools: string[];
   isActive: boolean;
   conversationCount: number;
+  
+  // Transfer configuration
+  transferToHuman?: TransferConfig;
+  transferToAgent?: TransferConfig;
+  fallbackMessage?: string; // Message when transfer fails
+  maxTransferAttempts?: number;
+  
+  // Escalation settings
+  escalationKeywords?: string[];
+  autoEscalateOnFrustration?: boolean;
+  autoEscalateOnRequest?: boolean;
+  
+  // Working hours (for after-hours transfer)
+  workingHoursEnabled?: boolean;
+  workingHoursStart?: string; // "09:00"
+  workingHoursEnd?: string; // "18:00"
+  workingDays?: number[]; // [1,2,3,4,5]
+  afterHoursMessage?: string;
+  afterHoursTransfer?: TransferConfig;
+  
   createdAt: Date;
   updatedAt: Date;
 }
@@ -64,6 +93,22 @@ export async function POST(req: NextRequest) {
       enabledTools,
       isActive,
       workspaceId = "demo-workspace",
+      // Transfer configuration
+      transferToHuman,
+      transferToAgent,
+      fallbackMessage,
+      maxTransferAttempts,
+      // Escalation settings
+      escalationKeywords,
+      autoEscalateOnFrustration,
+      autoEscalateOnRequest,
+      // Working hours
+      workingHoursEnabled,
+      workingHoursStart,
+      workingHoursEnd,
+      workingDays,
+      afterHoursMessage,
+      afterHoursTransfer,
     } = body;
 
     // Validate required fields
@@ -89,6 +134,27 @@ export async function POST(req: NextRequest) {
       enabledTools: enabledTools || ["sendWhatsapp", "scheduleMeeting"],
       isActive: isActive ?? true,
       conversationCount: 0,
+      // Transfer configuration
+      transferToHuman: transferToHuman || {
+        enabled: true,
+        type: "phone",
+        conditions: ["escalation", "request"],
+        message: "Te transferiré con un asesor humano. Un momento por favor.",
+      },
+      transferToAgent: transferToAgent || undefined,
+      fallbackMessage: fallbackMessage || "No pude completar la transferencia. Por favor intenta de nuevo más tarde.",
+      maxTransferAttempts: maxTransferAttempts || 3,
+      // Escalation settings
+      escalationKeywords: escalationKeywords || ["hablar con humano", "asesor", "persona real"],
+      autoEscalateOnFrustration: autoEscalateOnFrustration ?? true,
+      autoEscalateOnRequest: autoEscalateOnRequest ?? true,
+      // Working hours
+      workingHoursEnabled: workingHoursEnabled ?? false,
+      workingHoursStart: workingHoursStart || "09:00",
+      workingHoursEnd: workingHoursEnd || "18:00",
+      workingDays: workingDays || [1, 2, 3, 4, 5],
+      afterHoursMessage: afterHoursMessage || "Gracias por contactarnos. Nuestro horario de atención es de Lunes a Viernes de 9:00 a 18:00. Te contactaremos pronto.",
+      afterHoursTransfer: afterHoursTransfer || undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

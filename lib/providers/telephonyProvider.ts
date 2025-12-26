@@ -371,6 +371,125 @@ class TelephonyProvider {
   }
 
   /**
+   * Update an active call with new TwiML or redirect
+   * Used for transfers, agent switching, etc.
+   */
+  async updateCall(
+    callSid: string,
+    options: {
+      twiml?: string;
+      url?: string;
+      method?: "POST" | "GET";
+      status?: "canceled" | "completed";
+    }
+  ): Promise<boolean> {
+    if (!this.isConfigured) {
+      console.warn("Telephony not configured - using mock update");
+      return true;
+    }
+
+    try {
+      const body: Record<string, string> = {};
+      
+      if (options.twiml) {
+        body.Twiml = options.twiml;
+      } else if (options.url) {
+        body.Url = options.url;
+        if (options.method) {
+          body.Method = options.method;
+        }
+      }
+      
+      if (options.status) {
+        body.Status = options.status;
+      }
+
+      const response = await fetch(
+        `${this.baseUrl}/Accounts/${this.accountSid}/Calls/${callSid}.json`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: this.getAuthHeader(),
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams(body),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Error updating call:", error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error updating call:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Create a conference for multi-party calls
+   */
+  async createConference(
+    friendlyName: string,
+    options?: {
+      startOnEnter?: boolean;
+      endOnExit?: boolean;
+      waitUrl?: string;
+    }
+  ): Promise<string | null> {
+    // Conferences are created implicitly when participants join
+    // Return the conference name/ID
+    return friendlyName;
+  }
+
+  /**
+   * Add a participant to a conference
+   */
+  async addParticipantToConference(
+    conferenceName: string,
+    phoneNumber: string,
+    from: string,
+    options?: {
+      muted?: boolean;
+      coaching?: boolean;
+      earlyMedia?: boolean;
+    }
+  ): Promise<boolean> {
+    if (!this.isConfigured) {
+      console.warn("Telephony not configured - using mock conference");
+      return true;
+    }
+
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/Accounts/${this.accountSid}/Conferences/${conferenceName}/Participants.json`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: this.getAuthHeader(),
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            From: from,
+            To: phoneNumber,
+            EarlyMedia: String(options?.earlyMedia ?? false),
+            Muted: String(options?.muted ?? false),
+            Coaching: String(options?.coaching ?? false),
+          }),
+        }
+      );
+
+      return response.ok;
+    } catch (error) {
+      console.error("Error adding participant:", error);
+      return false;
+    }
+  }
+
+  /**
    * Validate webhook signature for security
    */
   validateWebhookSignature(

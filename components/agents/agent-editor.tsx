@@ -15,8 +15,38 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare, Calendar, ClipboardList, Tag, Play, Volume2, Globe, Loader2 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import {
+  MessageSquare,
+  Calendar,
+  ClipboardList,
+  Tag,
+  Play,
+  Globe,
+  Loader2,
+  Phone,
+  UserRound,
+  ArrowRightLeft,
+  Clock,
+  AlertTriangle,
+  ChevronDown,
+  Bot,
+} from "lucide-react";
 import { toast } from "sonner";
+
+interface TransferConfig {
+  enabled: boolean;
+  type: "phone" | "agent" | "queue";
+  destination?: string;
+  destinationName?: string;
+  conditions?: string[];
+  message?: string;
+}
 
 interface AgentEditorProps {
   agent?: {
@@ -26,6 +56,15 @@ interface AgentEditorProps {
     tone: string;
     language?: string;
     isActive: boolean;
+    transferToHuman?: TransferConfig;
+    transferToAgent?: TransferConfig;
+    autoEscalateOnFrustration?: boolean;
+    autoEscalateOnRequest?: boolean;
+    workingHoursEnabled?: boolean;
+    workingHoursStart?: string;
+    workingHoursEnd?: string;
+    workingDays?: number[];
+    afterHoursMessage?: string;
   } | null;
   onSave: () => void;
   onCancel: () => void;
@@ -65,6 +104,26 @@ const tools = [
   { id: "scheduleMeeting", label: UI.agents.tools.scheduleMeeting, icon: Calendar },
   { id: "createTask", label: UI.agents.tools.createTask, icon: ClipboardList },
   { id: "tagContact", label: UI.agents.tools.tagContact, icon: Tag },
+  { id: "transferHuman", label: "Transferir a humano", icon: UserRound },
+  { id: "transferAgent", label: "Transferir a otro agente", icon: Bot },
+];
+
+const transferConditions = [
+  { id: "escalation", label: "Cliente frustrado o molesto" },
+  { id: "request", label: "Cliente solicita hablar con humano" },
+  { id: "complex", label: "Pregunta compleja que no puede responder" },
+  { id: "high_value", label: "Cliente de alto valor" },
+  { id: "complaint", label: "Queja formal" },
+];
+
+const weekDays = [
+  { value: 0, label: "Dom" },
+  { value: 1, label: "Lun" },
+  { value: 2, label: "Mar" },
+  { value: 3, label: "Mié" },
+  { value: 4, label: "Jue" },
+  { value: 5, label: "Vie" },
+  { value: 6, label: "Sáb" },
 ];
 
 interface Voice {
@@ -84,10 +143,76 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
   const [goals, setGoals] = useState("");
   const [isActive, setIsActive] = useState(agent?.isActive ?? true);
 
+  // Transfer settings
+  const [transferHumanEnabled, setTransferHumanEnabled] = useState(agent?.transferToHuman?.enabled ?? true);
+  const [transferHumanPhone, setTransferHumanPhone] = useState(agent?.transferToHuman?.destination || "");
+  const [transferHumanMessage, setTransferHumanMessage] = useState(
+    agent?.transferToHuman?.message || "Te transferiré con un asesor. Un momento por favor."
+  );
+  const [transferConditionsSelected, setTransferConditionsSelected] = useState<string[]>(
+    agent?.transferToHuman?.conditions || ["escalation", "request"]
+  );
+
+  // Transfer to another agent
+  const [transferAgentEnabled, setTransferAgentEnabled] = useState(agent?.transferToAgent?.enabled ?? false);
+  const [transferAgentId, setTransferAgentId] = useState(agent?.transferToAgent?.destination || "");
+  const [availableAgents, setAvailableAgents] = useState<Array<{ id: string; name: string }>>([]);
+
+  // Escalation settings
+  const [autoEscalateOnFrustration, setAutoEscalateOnFrustration] = useState(agent?.autoEscalateOnFrustration ?? true);
+  const [autoEscalateOnRequest, setAutoEscalateOnRequest] = useState(agent?.autoEscalateOnRequest ?? true);
+
+  // Working hours
+  const [workingHoursEnabled, setWorkingHoursEnabled] = useState(agent?.workingHoursEnabled ?? false);
+  const [workingHoursStart, setWorkingHoursStart] = useState(agent?.workingHoursStart || "09:00");
+  const [workingHoursEnd, setWorkingHoursEnd] = useState(agent?.workingHoursEnd || "18:00");
+  const [workingDays, setWorkingDays] = useState<number[]>(agent?.workingDays || [1, 2, 3, 4, 5]);
+  const [afterHoursMessage, setAfterHoursMessage] = useState(
+    agent?.afterHoursMessage || "Nuestro horario es de Lun a Vie, 9am a 6pm. Te contactaremos pronto."
+  );
+
+  // Collapsible sections
+  const [transferSectionOpen, setTransferSectionOpen] = useState(false);
+  const [hoursSectionOpen, setHoursSectionOpen] = useState(false);
+
   // Voices state
   const [voices, setVoices] = useState<Voice[]>([]);
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+
+  // Fetch available agents for transfer
+  useEffect(() => {
+    fetchAvailableAgents();
+  }, []);
+
+  const fetchAvailableAgents = async () => {
+    try {
+      const response = await fetch("/api/agents");
+      const data = await response.json();
+      if (data.success && data.agents) {
+        // Filter out current agent
+        setAvailableAgents(
+          data.agents
+            .filter((a: { id: string }) => a.id !== agent?.id)
+            .map((a: { id: string; name: string }) => ({ id: a.id, name: a.name }))
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching agents:", error);
+    }
+  };
+
+  const toggleTransferCondition = (conditionId: string) => {
+    setTransferConditionsSelected((prev) =>
+      prev.includes(conditionId) ? prev.filter((c) => c !== conditionId) : [...prev, conditionId]
+    );
+  };
+
+  const toggleWorkingDay = (day: number) => {
+    setWorkingDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()
+    );
+  };
 
   // Fetch voices when language changes
   useEffect(() => {
@@ -171,6 +296,12 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
       return;
     }
 
+    // Validate transfer phone if enabled
+    if (transferHumanEnabled && !transferHumanPhone.trim()) {
+      toast.error("Por favor ingresa un número de teléfono para transferencias");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -184,6 +315,29 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
         enabledTools,
         goals,
         isActive,
+        // Transfer configuration
+        transferToHuman: {
+          enabled: transferHumanEnabled,
+          type: "phone" as const,
+          destination: transferHumanPhone,
+          conditions: transferConditionsSelected,
+          message: transferHumanMessage,
+        },
+        transferToAgent: transferAgentEnabled ? {
+          enabled: true,
+          type: "agent" as const,
+          destination: transferAgentId,
+          destinationName: availableAgents.find(a => a.id === transferAgentId)?.name,
+        } : undefined,
+        // Escalation settings
+        autoEscalateOnFrustration,
+        autoEscalateOnRequest,
+        // Working hours
+        workingHoursEnabled,
+        workingHoursStart,
+        workingHoursEnd,
+        workingDays,
+        afterHoursMessage,
       };
 
       const response = await fetch("/api/agents", {
@@ -364,6 +518,238 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
           ))}
         </div>
       </div>
+
+      <Separator />
+
+      {/* Transfer Configuration */}
+      <Collapsible open={transferSectionOpen} onOpenChange={setTransferSectionOpen}>
+        <CollapsibleTrigger className="flex items-center justify-between w-full p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <ArrowRightLeft className="h-5 w-5 text-primary" />
+            </div>
+            <div className="text-left">
+              <p className="font-medium">Transferencias</p>
+              <p className="text-sm text-muted-foreground">
+                Configura cuándo y cómo transferir a humanos u otros agentes
+              </p>
+            </div>
+          </div>
+          <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${transferSectionOpen ? "rotate-180" : ""}`} />
+        </CollapsibleTrigger>
+
+        <CollapsibleContent className="space-y-6 pt-4">
+          {/* Transfer to Human */}
+          <div className="space-y-4 p-4 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <UserRound className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Transferir a humano</p>
+                  <p className="text-sm text-muted-foreground">Número de teléfono para transferir llamadas</p>
+                </div>
+              </div>
+              <Switch checked={transferHumanEnabled} onCheckedChange={setTransferHumanEnabled} />
+            </div>
+
+            {transferHumanEnabled && (
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label>Número de teléfono</Label>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="+52 55 1234 5678"
+                      value={transferHumanPhone}
+                      onChange={(e) => setTransferHumanPhone(e.target.value)}
+                      className="flex-1"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    El número al que se transferirán las llamadas cuando el agente IA no pueda continuar
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Mensaje antes de transferir</Label>
+                  <Textarea
+                    value={transferHumanMessage}
+                    onChange={(e) => setTransferHumanMessage(e.target.value)}
+                    placeholder="Te transferiré con un asesor..."
+                    rows={2}
+                    className="resize-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Condiciones para transferir</Label>
+                  <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+                    {transferConditions.map((condition) => (
+                      <div
+                        key={condition.id}
+                        className="flex items-center gap-2 p-2 rounded border cursor-pointer hover:bg-muted/50"
+                        onClick={() => toggleTransferCondition(condition.id)}
+                      >
+                        <Switch
+                          checked={transferConditionsSelected.includes(condition.id)}
+                          onCheckedChange={() => toggleTransferCondition(condition.id)}
+                        />
+                        <span className="text-sm">{condition.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Transfer to Another Agent */}
+          <div className="space-y-4 p-4 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Bot className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Transferir a otro agente IA</p>
+                  <p className="text-sm text-muted-foreground">Delegar a un agente especializado</p>
+                </div>
+              </div>
+              <Switch checked={transferAgentEnabled} onCheckedChange={setTransferAgentEnabled} />
+            </div>
+
+            {transferAgentEnabled && (
+              <div className="space-y-2 pt-2">
+                <Label>Agente destino</Label>
+                <Select value={transferAgentId} onValueChange={setTransferAgentId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar agente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableAgents.length === 0 ? (
+                      <SelectItem value="none" disabled>No hay otros agentes</SelectItem>
+                    ) : (
+                      availableAgents.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Por ejemplo, transferir de ventas a soporte técnico
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Escalation Settings */}
+          <div className="space-y-3 p-4 rounded-lg border">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <Label className="mb-0">Escalamiento automático</Label>
+            </div>
+            
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm">Escalar cuando el cliente está frustrado</span>
+              <Switch checked={autoEscalateOnFrustration} onCheckedChange={setAutoEscalateOnFrustration} />
+            </div>
+            
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm">Escalar cuando el cliente pide un humano</span>
+              <Switch checked={autoEscalateOnRequest} onCheckedChange={setAutoEscalateOnRequest} />
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Working Hours */}
+      <Collapsible open={hoursSectionOpen} onOpenChange={setHoursSectionOpen}>
+        <CollapsibleTrigger className="flex items-center justify-between w-full p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Clock className="h-5 w-5 text-primary" />
+            </div>
+            <div className="text-left">
+              <p className="font-medium">Horario de atención</p>
+              <p className="text-sm text-muted-foreground">
+                {workingHoursEnabled 
+                  ? `${workingHoursStart} - ${workingHoursEnd}` 
+                  : "Disponible 24/7"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {workingHoursEnabled && (
+              <Badge variant="secondary">Configurado</Badge>
+            )}
+            <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${hoursSectionOpen ? "rotate-180" : ""}`} />
+          </div>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent className="space-y-4 pt-4">
+          <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div>
+              <p className="font-medium">Limitar horario de atención</p>
+              <p className="text-sm text-muted-foreground">
+                Define horarios específicos para que el agente responda
+              </p>
+            </div>
+            <Switch checked={workingHoursEnabled} onCheckedChange={setWorkingHoursEnabled} />
+          </div>
+
+          {workingHoursEnabled && (
+            <div className="space-y-4 p-4 rounded-lg border">
+              <div className="grid gap-4 grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Hora inicio</Label>
+                  <Input
+                    type="time"
+                    value={workingHoursStart}
+                    onChange={(e) => setWorkingHoursStart(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Hora fin</Label>
+                  <Input
+                    type="time"
+                    value={workingHoursEnd}
+                    onChange={(e) => setWorkingHoursEnd(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Días laborales</Label>
+                <div className="flex flex-wrap gap-2">
+                  {weekDays.map((day) => (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => toggleWorkingDay(day.value)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        workingDays.includes(day.value)
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Mensaje fuera de horario</Label>
+                <Textarea
+                  value={afterHoursMessage}
+                  onChange={(e) => setAfterHoursMessage(e.target.value)}
+                  placeholder="Nuestro horario es..."
+                  rows={2}
+                  className="resize-none"
+                />
+              </div>
+            </div>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
 
       <Separator />
 
