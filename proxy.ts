@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import type { NextRequest, NextFetchEvent } from "next/server";
 
 // Check if Clerk is properly configured
 function isClerkConfigured(): boolean {
@@ -34,20 +34,20 @@ const clerkHandler = clerkMiddleware(async (auth, request) => {
   }
 });
 
-// Main middleware function
-export default function middleware(request: NextRequest) {
+// Main proxy function - Next.js 16 uses proxy.ts instead of middleware.ts
+export default async function proxy(request: NextRequest, event: NextFetchEvent) {
   // If Clerk is not configured, skip authentication
   if (!isClerkConfigured()) {
     return NextResponse.next();
   }
   
   // Use Clerk middleware
-  return clerkHandler(request, {} as never);
+  return clerkHandler(request, event);
 }
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
+    // Skip Next.js internals and all static files
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     // Always run for API routes
     "/(api|trpc)(.*)",

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
+import { db } from "@/lib/db";
 import { validateWorkspaceName, isReservedSlug } from "@/lib/validation/reservedNames";
+import { getSingleRegion } from "@/lib/billing/regions";
 
 // Helper to generate slug from name
 function generateSlug(name: string): string {
@@ -12,10 +15,20 @@ function generateSlug(name: string): string {
     .substring(0, 50);
 }
 
+// Check if Clerk is configured
+function isClerkConfigured(): boolean {
+  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const secret = process.env.CLERK_SECRET_KEY;
+  if (!key || !secret) return false;
+  if (!key.startsWith("pk_")) return false;
+  if (key.length < 50) return false;
+  return true;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, industry, timezone, language } = body;
+    const { name, industry, timezone, language, countries, billingRegion } = body;
 
     // Validate required fields
     if (!name || typeof name !== "string" || !name.trim()) {
@@ -59,44 +72,111 @@ export async function POST(req: Request) {
     const validLanguages = ["es", "en", "pt"];
     const workspaceLanguage = validLanguages.includes(language) ? language : "es";
 
-    // TODO: Get current user from Clerk and create workspace in database
-    // For now, we'll simulate workspace creation
-    
-    // In production, this would be:
-    // const user = await currentUser();
-    // const workspace = await prisma.workspace.create({
-    //   data: {
-    //     name: name.trim(),
-    //     slug,
-    //     timezone: timezone || "America/Mexico_City",
-    //     language: workspaceLanguage,
-    //     members: {
-    //       create: {
-    //         userId: user.id,
-    //         role: "OWNER",
-    //       },
-    //     },
-    //     onboardingChecklist: {
-    //       create: {},
-    //     },
-    //   },
-    // });
+    // Determine billing region
+    const resolvedRegion = billingRegion || getSingleRegion(countries || []) || "LATAM";
 
-    console.log("Creating workspace:", {
-      name: name.trim(),
-      slug,
-      industry,
-      timezone: timezone || "America/Mexico_City",
-      language: workspaceLanguage,
+    // Get authenticated user if Clerk is configured
+    let clerkUserId: string | null = null;
+    let userEmail: string | null = null;
+    let firstName: string | null = null;
+    let lastName: string | null = null;
+
+    if (isClerkConfigured()) {
+      try {
+        const { userId } = await auth();
+        clerkUserId = userId;
+        
+        const user = await currentUser();
+        if (user) {
+          userEmail = user.emailAddresses?.[0]?.emailAddress || null;
+          firstName = user.firstName;
+          lastName = user.lastName;
+        }
+      } catch (e) {
+        console.warn("Could not get Clerk user:", e);
+      }
+    }
+
+    // Create workspace with transaction
+    const result = await db.$transaction(async (tx) => {
+      // First, find or create the user
+      let dbUser = null;
+      
+      if (clerkUserId && userEmail) {
+        dbUser = await tx.user.upsert({
+          where: { clerkId: clerkUserId },
+          update: {
+            email: userEmail,
+            firstName,
+            lastName,
+          },
+          create: {
+            clerkId: clerkUserId,
+            email: userEmail,
+            firstName,
+            lastName,
+          },
+        });
+      }
+
+      // Create the workspace
+      const workspace = await tx.workspace.create({
+        data: {
+          name: name.trim(),
+          slug,
+          timezone: timezone || "America/Mexico_City",
+          language: workspaceLanguage,
+          billingRegion: resolvedRegion,
+          billingCountry: countries?.[0] || null,
+          // Create onboarding checklist
+          onboardingChecklist: {
+            create: {},
+          },
+          // Create initial subscription (inactive until billing is set up)
+          subscription: {
+            create: {
+              planCode: "starter",
+              regionCode: resolvedRegion,
+              status: "INACTIVE",
+            },
+          },
+        },
+      });
+
+      // Add user as owner if we have a user
+      if (dbUser) {
+        await tx.workspaceMember.create({
+          data: {
+            workspaceId: workspace.id,
+            userId: dbUser.id,
+            role: "OWNER",
+          },
+        });
+      }
+
+      return workspace;
     });
 
-    // Simulate workspace creation with generated ID
-    const workspaceId = `ws_${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
+    // Update Clerk user metadata to mark onboarding as complete
+    if (clerkUserId && isClerkConfigured()) {
+      try {
+        const client = await clerkClient();
+        await client.users.updateUserMetadata(clerkUserId, {
+          publicMetadata: {
+            currentWorkspaceId: result.id,
+            onboardingComplete: true,
+            preferredLanguage: workspaceLanguage,
+          },
+        });
+      } catch (e) {
+        console.warn("Could not update Clerk metadata:", e);
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      workspaceId,
-      slug,
+      workspaceId: result.id,
+      slug: result.slug,
       message: "Espacio de trabajo creado exitosamente",
     });
   } catch (error) {
@@ -107,4 +187,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

@@ -1,8 +1,26 @@
 import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 
+// Check if Clerk is configured
+function isClerkConfigured(): boolean {
+  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const secret = process.env.CLERK_SECRET_KEY;
+  if (!key || !secret) return false;
+  if (!key.startsWith("pk_")) return false;
+  if (key.length < 50) return false;
+  return true;
+}
+
 export async function POST() {
   try {
+    // If Clerk is not configured, just return success
+    if (!isClerkConfigured()) {
+      return NextResponse.json({
+        success: true,
+        message: "Onboarding saltado (Clerk no configurado)",
+      });
+    }
+
     const { userId } = await auth();
     
     if (!userId) {
@@ -33,4 +51,3 @@ export async function POST() {
     );
   }
 }
-

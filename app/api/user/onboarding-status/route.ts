@@ -11,8 +11,28 @@ interface PublicMetadata {
   preferredLanguage?: string;
 }
 
+// Check if Clerk is configured
+function isClerkConfigured(): boolean {
+  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const secret = process.env.CLERK_SECRET_KEY;
+  if (!key || !secret) return false;
+  if (!key.startsWith("pk_")) return false;
+  if (key.length < 50) return false;
+  return true;
+}
+
 export async function GET() {
   try {
+    // If Clerk is not configured, return unauthenticated state
+    if (!isClerkConfigured()) {
+      return NextResponse.json({
+        authenticated: false,
+        needsOnboarding: false,
+        hasWorkspace: false,
+        clerkConfigured: false,
+      });
+    }
+
     const { userId, orgId, orgSlug } = await auth();
     
     if (!userId) {
@@ -68,4 +88,3 @@ export async function GET() {
     );
   }
 }
-

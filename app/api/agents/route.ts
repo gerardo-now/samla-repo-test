@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
 
 /**
  * Agents API
@@ -6,69 +7,43 @@ import { NextRequest, NextResponse } from "next/server";
  * CRUD operations for AI agents
  */
 
-// In-memory storage for demo (in production, use Prisma)
-const agents: Map<string, AgentData> = new Map();
-
-interface TransferConfig {
-  enabled: boolean;
-  type: "phone" | "agent" | "queue";
-  destination?: string; // Phone number or agent ID
-  destinationName?: string;
-  conditions?: string[]; // When to transfer: "escalation", "request", "after_hours", etc.
-  message?: string; // Message before transfer
-}
-
-interface AgentData {
-  id: string;
-  workspaceId: string;
-  name: string;
-  template: "sales" | "support" | "collections" | "custom";
-  tone: string;
-  language: string;
-  voiceId?: string;
-  goals: string;
-  enabledTools: string[];
-  isActive: boolean;
-  conversationCount: number;
-  
-  // Transfer configuration
-  transferToHuman?: TransferConfig;
-  transferToAgent?: TransferConfig;
-  fallbackMessage?: string; // Message when transfer fails
-  maxTransferAttempts?: number;
-  
-  // Escalation settings
-  escalationKeywords?: string[];
-  autoEscalateOnFrustration?: boolean;
-  autoEscalateOnRequest?: boolean;
-  
-  // Working hours (for after-hours transfer)
-  workingHoursEnabled?: boolean;
-  workingHoursStart?: string; // "09:00"
-  workingHoursEnd?: string; // "18:00"
-  workingDays?: number[]; // [1,2,3,4,5]
-  afterHoursMessage?: string;
-  afterHoursTransfer?: TransferConfig;
-  
-  createdAt: Date;
-  updatedAt: Date;
+// Helper to get workspaceId from header or query (for now, use demo if not available)
+function getWorkspaceId(req: NextRequest): string {
+  const headerWorkspaceId = req.headers.get("x-workspace-id");
+  const { searchParams } = new URL(req.url);
+  return headerWorkspaceId || searchParams.get("workspaceId") || "demo-workspace";
 }
 
 // GET /api/agents - List all agents
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const workspaceId = searchParams.get("workspaceId") || "demo-workspace";
+    const workspaceId = getWorkspaceId(req);
 
-    // Filter agents by workspace
-    const workspaceAgents = Array.from(agents.values()).filter(
-      (a) => a.workspaceId === workspaceId
-    );
+    // Get agents from database
+    const agents = await db.agent.findMany({
+      where: { workspaceId },
+      include: {
+        voice: true,
+        _count: {
+          select: {
+            conversations: true,
+            phoneNumbers: true,
+            callerIds: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
     return NextResponse.json({
       success: true,
-      agents: workspaceAgents,
-      total: workspaceAgents.length,
+      agents: agents.map(agent => ({
+        ...agent,
+        conversationCount: agent._count.conversations,
+        phoneNumberCount: agent._count.phoneNumbers,
+        callerIdCount: agent._count.callerIds,
+      })),
+      total: agents.length,
     });
   } catch (error) {
     console.error("Error listing agents:", error);
@@ -83,6 +58,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const workspaceId = getWorkspaceId(req);
+    
     const {
       name,
       template,
@@ -92,23 +69,9 @@ export async function POST(req: NextRequest) {
       goals,
       enabledTools,
       isActive,
-      workspaceId = "demo-workspace",
-      // Transfer configuration
-      transferToHuman,
-      transferToAgent,
-      fallbackMessage,
-      maxTransferAttempts,
-      // Escalation settings
-      escalationKeywords,
-      autoEscalateOnFrustration,
-      autoEscalateOnRequest,
-      // Working hours
-      workingHoursEnabled,
-      workingHoursStart,
-      workingHoursEnd,
-      workingDays,
-      afterHoursMessage,
-      afterHoursTransfer,
+      description,
+      systemPrompt,
+      knowledgeCollectionIds,
     } = body;
 
     // Validate required fields
@@ -119,48 +82,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate unique ID
-    const id = `agent_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    // Verify workspace exists
+    const workspace = await db.workspace.findUnique({
+      where: { id: workspaceId },
+    });
 
-    const newAgent: AgentData = {
-      id,
-      workspaceId,
-      name: name.trim(),
-      template: template || "sales",
-      tone: tone || "professional",
-      language: language || "es-MX",
-      voiceId: voiceId || undefined,
-      goals: goals || "",
-      enabledTools: enabledTools || ["sendWhatsapp", "scheduleMeeting"],
-      isActive: isActive ?? true,
-      conversationCount: 0,
-      // Transfer configuration
-      transferToHuman: transferToHuman || {
-        enabled: true,
-        type: "phone",
-        conditions: ["escalation", "request"],
-        message: "Te transferiré con un asesor humano. Un momento por favor.",
+    if (!workspace) {
+      return NextResponse.json(
+        { error: "Workspace no encontrado" },
+        { status: 404 }
+      );
+    }
+
+    // Create agent in database
+    const newAgent = await db.agent.create({
+      data: {
+        workspaceId,
+        name: name.trim(),
+        template: template || "SALES",
+        description: description || null,
+        systemPrompt: systemPrompt || null,
+        tone: tone || "professional",
+        language: language || "es-MX",
+        voiceId: voiceId || null,
+        goals: goals ? (Array.isArray(goals) ? goals : goals.split("\n").filter(Boolean)) : [],
+        enabledTools: enabledTools || ["sendWhatsapp", "scheduleMeeting"],
+        knowledgeCollectionIds: knowledgeCollectionIds || [],
+        isActive: isActive ?? true,
       },
-      transferToAgent: transferToAgent || undefined,
-      fallbackMessage: fallbackMessage || "No pude completar la transferencia. Por favor intenta de nuevo más tarde.",
-      maxTransferAttempts: maxTransferAttempts || 3,
-      // Escalation settings
-      escalationKeywords: escalationKeywords || ["hablar con humano", "asesor", "persona real"],
-      autoEscalateOnFrustration: autoEscalateOnFrustration ?? true,
-      autoEscalateOnRequest: autoEscalateOnRequest ?? true,
-      // Working hours
-      workingHoursEnabled: workingHoursEnabled ?? false,
-      workingHoursStart: workingHoursStart || "09:00",
-      workingHoursEnd: workingHoursEnd || "18:00",
-      workingDays: workingDays || [1, 2, 3, 4, 5],
-      afterHoursMessage: afterHoursMessage || "Gracias por contactarnos. Nuestro horario de atención es de Lunes a Viernes de 9:00 a 18:00. Te contactaremos pronto.",
-      afterHoursTransfer: afterHoursTransfer || undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    // Save agent
-    agents.set(id, newAgent);
+      include: {
+        voice: true,
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -188,7 +141,11 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const existingAgent = agents.get(id);
+    // Check if agent exists
+    const existingAgent = await db.agent.findUnique({
+      where: { id },
+    });
+
     if (!existingAgent) {
       return NextResponse.json(
         { error: "Agente no encontrado" },
@@ -196,14 +153,33 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Update agent
-    const updatedAgent: AgentData = {
-      ...existingAgent,
-      ...updates,
-      updatedAt: new Date(),
-    };
+    // Prepare update data
+    const updateData: Record<string, unknown> = {};
+    
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.template !== undefined) updateData.template = updates.template;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.systemPrompt !== undefined) updateData.systemPrompt = updates.systemPrompt;
+    if (updates.tone !== undefined) updateData.tone = updates.tone;
+    if (updates.language !== undefined) updateData.language = updates.language;
+    if (updates.voiceId !== undefined) updateData.voiceId = updates.voiceId || null;
+    if (updates.goals !== undefined) {
+      updateData.goals = Array.isArray(updates.goals) 
+        ? updates.goals 
+        : updates.goals.split("\n").filter(Boolean);
+    }
+    if (updates.enabledTools !== undefined) updateData.enabledTools = updates.enabledTools;
+    if (updates.knowledgeCollectionIds !== undefined) updateData.knowledgeCollectionIds = updates.knowledgeCollectionIds;
+    if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
 
-    agents.set(id, updatedAgent);
+    // Update agent
+    const updatedAgent = await db.agent.update({
+      where: { id },
+      data: updateData,
+      include: {
+        voice: true,
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -231,14 +207,22 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    if (!agents.has(id)) {
+    // Check if agent exists
+    const existingAgent = await db.agent.findUnique({
+      where: { id },
+    });
+
+    if (!existingAgent) {
       return NextResponse.json(
         { error: "Agente no encontrado" },
         { status: 404 }
       );
     }
 
-    agents.delete(id);
+    // Delete agent
+    await db.agent.delete({
+      where: { id },
+    });
 
     return NextResponse.json({
       success: true,
@@ -252,4 +236,3 @@ export async function DELETE(req: NextRequest) {
     );
   }
 }
-

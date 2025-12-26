@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 
 /**
  * Contacts API
@@ -6,212 +8,77 @@ import { NextRequest, NextResponse } from "next/server";
  * CRUD operations for CRM contacts
  */
 
-// In-memory storage for demo (in production, use Prisma)
-const contacts: Map<string, ContactData> = new Map();
-
-interface ContactData {
-  id: string;
-  workspaceId: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
-  email?: string;
-  company?: string;
-  status: "prospect" | "client" | "lost";
-  tags: string[];
-  notes: string;
-  lastContactAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-  // AI-generated fields
-  aiLabels?: string[];
-  aiSegment?: string;
-  aiSentiment?: string;
-  aiScore?: number;
-  aiSummary?: string;
-  needsHumanReview?: boolean;
-  escalationReason?: string;
+// Helper to get workspaceId from header or query
+function getWorkspaceId(req: NextRequest): string {
+  const headerWorkspaceId = req.headers.get("x-workspace-id");
+  const { searchParams } = new URL(req.url);
+  return headerWorkspaceId || searchParams.get("workspaceId") || "demo-workspace";
 }
-
-// Seed some demo data with AI labels
-function seedDemoData() {
-  if (contacts.size === 0) {
-    const demoContacts: Omit<ContactData, "id">[] = [
-      {
-        workspaceId: "demo-workspace",
-        firstName: "Carlos",
-        lastName: "González",
-        phone: "+52 55 1234 5678",
-        email: "carlos@empresa.mx",
-        company: "TechSolutions MX",
-        status: "client",
-        tags: ["vip", "tech"],
-        notes: "Cliente frecuente, prefiere comunicación por WhatsApp",
-        lastContactAt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        // AI fields
-        aiLabels: ["returning", "decision_maker"],
-        aiSegment: "VIP",
-        aiSentiment: "POSITIVE",
-        aiScore: 92,
-        aiSummary: "Cliente VIP con alta satisfacción. Tomador de decisiones.",
-        needsHumanReview: false,
-      },
-      {
-        workspaceId: "demo-workspace",
-        firstName: "María",
-        lastName: "Rodríguez",
-        phone: "+52 81 9876 5432",
-        email: "maria@innovatech.com",
-        company: "InnovaTech",
-        status: "prospect",
-        tags: ["lead-caliente"],
-        notes: "Interesada en el plan empresarial",
-        lastContactAt: new Date(Date.now() - 86400000),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        // AI fields
-        aiLabels: ["interested", "urgent", "decision_maker"],
-        aiSegment: "HOT_LEAD",
-        aiSentiment: "VERY_POSITIVE",
-        aiScore: 85,
-        aiSummary: "Lead muy interesado, listo para cerrar. Contactar pronto.",
-        needsHumanReview: false,
-      },
-      {
-        workspaceId: "demo-workspace",
-        firstName: "Roberto",
-        lastName: "Martínez",
-        phone: "+52 33 5555 4444",
-        company: "Digital Agency",
-        status: "prospect",
-        tags: [],
-        notes: "",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        // AI fields
-        aiLabels: ["price_sensitive"],
-        aiSegment: "WARM_LEAD",
-        aiSentiment: "NEUTRAL",
-        aiScore: 55,
-        aiSummary: "Lead tibio, necesita más información sobre precios.",
-        needsHumanReview: false,
-      },
-      {
-        workspaceId: "demo-workspace",
-        firstName: "Ana",
-        lastName: "López",
-        phone: "+52 55 7777 8888",
-        email: "ana@servicios.mx",
-        company: "Servicios Premium",
-        status: "prospect",
-        tags: [],
-        notes: "Expresó frustración con respuesta automática",
-        lastContactAt: new Date(Date.now() - 3600000),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        // AI fields - needs escalation
-        aiLabels: ["interested"],
-        aiSegment: "SUPPORT_NEEDED",
-        aiSentiment: "FRUSTRATED",
-        aiScore: 60,
-        aiSummary: "Cliente frustrado, solicitó hablar con un humano.",
-        needsHumanReview: true,
-        escalationReason: "FRUSTRATED_CUSTOMER",
-      },
-      {
-        workspaceId: "demo-workspace",
-        firstName: "Pedro",
-        lastName: "Sánchez",
-        phone: "+52 81 3333 2222",
-        email: "pedro@granempresa.com",
-        company: "Gran Empresa SA",
-        status: "prospect",
-        tags: [],
-        notes: "Pedido grande, múltiples ubicaciones",
-        lastContactAt: new Date(Date.now() - 7200000),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        // AI fields - high value needs attention
-        aiLabels: ["interested", "decision_maker", "urgent"],
-        aiSegment: "HOT_LEAD",
-        aiSentiment: "POSITIVE",
-        aiScore: 90,
-        aiSummary: "Oportunidad de alto valor. Múltiples ubicaciones.",
-        needsHumanReview: true,
-        escalationReason: "HIGH_VALUE",
-      },
-      {
-        workspaceId: "demo-workspace",
-        firstName: "Laura",
-        lastName: "Fernández",
-        phone: "+52 33 1111 0000",
-        company: "StartupTech",
-        status: "lost",
-        tags: [],
-        notes: "Se fue con la competencia",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        // AI fields
-        aiLabels: ["competitor_mention", "price_sensitive"],
-        aiSegment: "COLD_LEAD",
-        aiSentiment: "NEGATIVE",
-        aiScore: 20,
-        aiSummary: "Perdido por precio. Mencionó competidor más barato.",
-        needsHumanReview: false,
-      },
-    ];
-
-    demoContacts.forEach((contact, index) => {
-      const id = `contact_demo_${index + 1}`;
-      contacts.set(id, { ...contact, id });
-    });
-  }
-}
-
-seedDemoData();
 
 // GET /api/contacts - List all contacts
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const workspaceId = searchParams.get("workspaceId") || "demo-workspace";
+    const workspaceId = getWorkspaceId(req);
     const status = searchParams.get("status");
     const search = searchParams.get("search")?.toLowerCase();
+    const needsReview = searchParams.get("needsReview");
+    const segment = searchParams.get("segment");
 
-    let result = Array.from(contacts.values()).filter(
-      (c) => c.workspaceId === workspaceId
-    );
+    // Build where clause
+    const where: Prisma.ContactWhereInput = {
+      workspaceId,
+    };
 
     // Filter by status
     if (status && status !== "all") {
-      result = result.filter((c) => c.status === status);
+      where.status = status.toUpperCase() as "PROSPECT" | "CLIENT" | "LOST";
+    }
+
+    // Filter by needs human review
+    if (needsReview === "true") {
+      where.needsHumanReview = true;
+    }
+
+    // Filter by AI segment
+    if (segment) {
+      where.aiSegment = segment as Prisma.EnumContactSegmentNullableFilter["equals"];
     }
 
     // Search filter
     if (search) {
-      result = result.filter(
-        (c) =>
-          c.firstName.toLowerCase().includes(search) ||
-          c.lastName.toLowerCase().includes(search) ||
-          c.phone?.includes(search) ||
-          c.email?.toLowerCase().includes(search) ||
-          c.company?.toLowerCase().includes(search)
-      );
+      where.OR = [
+        { firstName: { contains: search, mode: "insensitive" } },
+        { lastName: { contains: search, mode: "insensitive" } },
+        { phone: { contains: search } },
+        { email: { contains: search, mode: "insensitive" } },
+        { company: { contains: search, mode: "insensitive" } },
+      ];
     }
 
-    // Sort by last contact
-    result.sort((a, b) => {
-      const dateA = a.lastContactAt?.getTime() || 0;
-      const dateB = b.lastContactAt?.getTime() || 0;
-      return dateB - dateA;
+    const contacts = await db.contact.findMany({
+      where,
+      include: {
+        _count: {
+          select: {
+            conversations: true,
+            tasks: true,
+            notes: true,
+          },
+        },
+      },
+      orderBy: { lastContactAt: { sort: "desc", nulls: "last" } },
     });
 
     return NextResponse.json({
       success: true,
-      contacts: result,
-      total: result.length,
+      contacts: contacts.map(contact => ({
+        ...contact,
+        conversationCount: contact._count.conversations,
+        taskCount: contact._count.tasks,
+        noteCount: contact._count.notes,
+      })),
+      total: contacts.length,
     });
   } catch (error) {
     console.error("Error listing contacts:", error);
@@ -226,16 +93,16 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const workspaceId = getWorkspaceId(req);
+    
     const {
       firstName,
       lastName,
       phone,
       email,
       company,
-      status = "prospect",
+      status = "PROSPECT",
       tags = [],
-      notes = "",
-      workspaceId = "demo-workspace",
     } = body;
 
     // Validate required fields
@@ -246,25 +113,43 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate unique ID
-    const id = `contact_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    // Check for duplicate phone/email in workspace
+    if (phone) {
+      const existingByPhone = await db.contact.findUnique({
+        where: { workspaceId_phone: { workspaceId, phone: phone.trim() } },
+      });
+      if (existingByPhone) {
+        return NextResponse.json(
+          { error: "Ya existe un contacto con este teléfono" },
+          { status: 400 }
+        );
+      }
+    }
 
-    const newContact: ContactData = {
-      id,
-      workspaceId,
-      firstName: firstName.trim(),
-      lastName: lastName?.trim() || "",
-      phone: phone?.trim(),
-      email: email?.trim(),
-      company: company?.trim(),
-      status,
-      tags,
-      notes,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    if (email) {
+      const existingByEmail = await db.contact.findUnique({
+        where: { workspaceId_email: { workspaceId, email: email.trim().toLowerCase() } },
+      });
+      if (existingByEmail) {
+        return NextResponse.json(
+          { error: "Ya existe un contacto con este email" },
+          { status: 400 }
+        );
+      }
+    }
 
-    contacts.set(id, newContact);
+    const newContact = await db.contact.create({
+      data: {
+        workspaceId,
+        firstName: firstName.trim(),
+        lastName: lastName?.trim() || null,
+        phone: phone?.trim() || null,
+        email: email?.trim().toLowerCase() || null,
+        company: company?.trim() || null,
+        status: status.toUpperCase() as "PROSPECT" | "CLIENT" | "LOST",
+        tags,
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -292,7 +177,10 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const existingContact = contacts.get(id);
+    const existingContact = await db.contact.findUnique({
+      where: { id },
+    });
+
     if (!existingContact) {
       return NextResponse.json(
         { error: "Contacto no encontrado" },
@@ -300,13 +188,30 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const updatedContact: ContactData = {
-      ...existingContact,
-      ...updates,
-      updatedAt: new Date(),
-    };
+    // Prepare update data
+    const updateData: Prisma.ContactUpdateInput = {};
+    
+    if (updates.firstName !== undefined) updateData.firstName = updates.firstName;
+    if (updates.lastName !== undefined) updateData.lastName = updates.lastName;
+    if (updates.phone !== undefined) updateData.phone = updates.phone || null;
+    if (updates.email !== undefined) updateData.email = updates.email?.toLowerCase() || null;
+    if (updates.company !== undefined) updateData.company = updates.company;
+    if (updates.status !== undefined) updateData.status = updates.status.toUpperCase();
+    if (updates.tags !== undefined) updateData.tags = updates.tags;
+    if (updates.lastContactAt !== undefined) updateData.lastContactAt = updates.lastContactAt;
+    if (updates.nextActionAt !== undefined) updateData.nextActionAt = updates.nextActionAt;
+    if (updates.nextActionNote !== undefined) updateData.nextActionNote = updates.nextActionNote;
+    
+    // Clear human review if reviewed
+    if (updates.needsHumanReview === false) {
+      updateData.needsHumanReview = false;
+      updateData.reviewedAt = new Date();
+    }
 
-    contacts.set(id, updatedContact);
+    const updatedContact = await db.contact.update({
+      where: { id },
+      data: updateData,
+    });
 
     return NextResponse.json({
       success: true,
@@ -334,14 +239,20 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    if (!contacts.has(id)) {
+    const existingContact = await db.contact.findUnique({
+      where: { id },
+    });
+
+    if (!existingContact) {
       return NextResponse.json(
         { error: "Contacto no encontrado" },
         { status: 404 }
       );
     }
 
-    contacts.delete(id);
+    await db.contact.delete({
+      where: { id },
+    });
 
     return NextResponse.json({
       success: true,
@@ -355,4 +266,3 @@ export async function DELETE(req: NextRequest) {
     );
   }
 }
-

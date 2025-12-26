@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -272,7 +272,18 @@ const uiStrings: Record<string, Record<string, string>> = {
   },
 };
 
-export function OnboardingWizard() {
+// Check if Clerk is configured
+function isClerkConfigured(): boolean {
+  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  if (!key) return false;
+  if (!key.startsWith("pk_")) return false;
+  if (key.includes("placeholder") || key.includes("YOUR_")) return false;
+  if (key.length < 50) return false;
+  return true;
+}
+
+// Inner component that uses Clerk hooks - only rendered when Clerk is configured
+function OnboardingWizardInner() {
   const { user, isLoaded: isUserLoaded } = useUser();
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<StepType>("welcome");
@@ -945,4 +956,17 @@ export function OnboardingWizard() {
       </DialogContent>
     </Dialog>
   );
+}
+
+// Main exported component - safely checks if Clerk is configured before rendering
+export function OnboardingWizard() {
+  // useMemo to check once on mount
+  const clerkConfigured = useMemo(() => isClerkConfigured(), []);
+
+  // Don't render the wizard if Clerk is not configured
+  if (!clerkConfigured) {
+    return null;
+  }
+
+  return <OnboardingWizardInner />;
 }
