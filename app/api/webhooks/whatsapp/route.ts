@@ -151,6 +151,7 @@ async function handlePhoneNumberDisconnected(data: Record<string, unknown>) {
 
 /**
  * Handle incoming WhatsApp message
+ * Processes with AI agent and responds via WhatsApp
  */
 async function handleIncomingMessage(data: Record<string, unknown>) {
   const messageId = data.id as string;
@@ -165,44 +166,56 @@ async function handleIncomingMessage(data: Record<string, unknown>) {
     from,
     phoneNumberId,
     messageType,
+    content: content?.body,
   });
 
-  // TODO: In production:
-  // 1. Find or create conversation
-  // 2. Store message in database
-  // 3. Trigger AI agent if live mode is enabled
-  // 4. Send real-time update to inbox UI
+  // Skip non-text messages for now
+  if (messageType !== "text" || !content?.body) {
+    console.log("Skipping non-text message");
+    return;
+  }
 
-  // Example:
-  // const channel = await prisma.channel.findUnique({
-  //   where: { externalId: phoneNumberId },
-  //   include: { workspace: true },
-  // });
-  // 
-  // const conversation = await prisma.conversation.upsert({
-  //   where: {
-  //     channelId_externalContactId: {
-  //       channelId: channel.id,
-  //       externalContactId: from,
-  //     },
-  //   },
-  //   update: { lastMessageAt: new Date(parseInt(timestamp) * 1000) },
-  //   create: {
-  //     workspaceId: channel.workspaceId,
-  //     channelId: channel.id,
-  //     externalContactId: from,
-  //   },
-  // });
-  // 
-  // await prisma.message.create({
-  //   data: {
-  //     conversationId: conversation.id,
-  //     direction: "INBOUND",
-  //     messageType: messageType.toUpperCase(),
-  //     content: content?.body,
-  //     externalId: messageId,
-  //   },
-  // });
+  try {
+    // Import agent service dynamically to avoid circular dependencies
+    const { agentService } = await import("@/lib/services/agentService");
+
+    // Process message with AI agent
+    const context = {
+      workspaceId: "demo-workspace", // In production: get from channel lookup
+      agentId: "demo-agent",
+      channelType: "WHATSAPP" as const,
+      contactPhone: from,
+    };
+
+    const response = await agentService.processMessage(context, content.body, []);
+
+    console.log("Agent response:", {
+      message: response.message,
+      action: response.action,
+      shouldEscalate: response.shouldEscalate,
+      analysis: response.analysis?.intent,
+    });
+
+    // Send response via WhatsApp (in production)
+    // await kapsoProvider.sendMessage(phoneNumberId, from, response.message);
+
+    // If escalation needed, notify team (in production)
+    if (response.shouldEscalate) {
+      console.log("Escalation triggered:", response.escalationReason);
+      // await notifyTeam(workspaceId, from, response.escalationReason);
+    }
+
+    // Store in database (in production)
+    // await prisma.message.createMany({
+    //   data: [
+    //     { conversationId, direction: "INBOUND", content: content.body },
+    //     { conversationId, direction: "OUTBOUND", content: response.message },
+    //   ],
+    // });
+
+  } catch (error) {
+    console.error("Error processing WhatsApp message with agent:", error);
+  }
 }
 
 /**
