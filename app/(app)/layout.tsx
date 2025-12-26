@@ -1,6 +1,9 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 
+// Force dynamic rendering to avoid pre-rendering with Clerk
+export const dynamic = "force-dynamic";
+
 export default function AppLayout({
   children,
 }: {
