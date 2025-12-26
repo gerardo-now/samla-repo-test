@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { UI } from "@/lib/copy/uiStrings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare, Calendar, ClipboardList, Tag, Play, Volume2 } from "lucide-react";
+import { MessageSquare, Calendar, ClipboardList, Tag, Play, Volume2, Globe, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface AgentEditorProps {
   agent?: {
@@ -23,6 +24,7 @@ interface AgentEditorProps {
     name: string;
     template: string;
     tone: string;
+    language?: string;
     isActive: boolean;
   } | null;
   onSave: () => void;
@@ -43,6 +45,22 @@ const tones = [
   { value: "casual", label: UI.agents.tones.casual },
 ];
 
+// Agent languages (for AI responses)
+// These are the languages the agent will speak/respond in
+const agentLanguages = [
+  { value: "es-MX", label: "Español (México)", flag: "🇲🇽" },
+  { value: "es-ES", label: "Español (España)", flag: "🇪🇸" },
+  { value: "es-AR", label: "Español (Argentina)", flag: "🇦🇷" },
+  { value: "es-CO", label: "Español (Colombia)", flag: "🇨🇴" },
+  { value: "en-US", label: "English (US)", flag: "🇺🇸" },
+  { value: "en-GB", label: "English (UK)", flag: "🇬🇧" },
+  { value: "pt-BR", label: "Português (Brasil)", flag: "🇧🇷" },
+  { value: "pt-PT", label: "Português (Portugal)", flag: "🇵🇹" },
+  { value: "fr-FR", label: "Français", flag: "🇫🇷" },
+  { value: "de-DE", label: "Deutsch", flag: "🇩🇪" },
+  { value: "it-IT", label: "Italiano", flag: "🇮🇹" },
+];
+
 const tools = [
   { id: "sendWhatsapp", label: UI.agents.tools.sendWhatsapp, icon: MessageSquare },
   { id: "scheduleMeeting", label: UI.agents.tools.scheduleMeeting, icon: Calendar },
@@ -50,20 +68,93 @@ const tools = [
   { id: "tagContact", label: UI.agents.tools.tagContact, icon: Tag },
 ];
 
-const mockVoices = [
-  { id: "voice-1", name: "Sofia", language: "es-MX", tone: "Amigable" },
-  { id: "voice-2", name: "Carlos", language: "es-MX", tone: "Profesional" },
-  { id: "voice-3", name: "María", language: "es-ES", tone: "Formal" },
-];
+interface Voice {
+  id: string;
+  name: string;
+  language: string;
+  previewUrl?: string;
+}
 
 export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
   const [name, setName] = useState(agent?.name || "");
   const [template, setTemplate] = useState(agent?.template || "sales");
   const [tone, setTone] = useState(agent?.tone || "professional");
+  const [language, setLanguage] = useState(agent?.language || "es-MX");
   const [voiceId, setVoiceId] = useState("");
   const [enabledTools, setEnabledTools] = useState<string[]>(["sendWhatsapp", "scheduleMeeting"]);
   const [goals, setGoals] = useState("");
   const [isActive, setIsActive] = useState(agent?.isActive ?? true);
+
+  // Voices state
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+
+  // Fetch voices when language changes
+  useEffect(() => {
+    fetchVoices();
+  }, [language]);
+
+  const fetchVoices = async () => {
+    setIsLoadingVoices(true);
+    try {
+      // Get the base language code (e.g., "es" from "es-MX")
+      const baseLang = language.split("-")[0];
+      const response = await fetch(`/api/voices?language=${baseLang}`);
+      const data = await response.json();
+
+      if (data.success && data.voices) {
+        setVoices(data.voices);
+        // Auto-select first voice if none selected
+        if (!voiceId && data.voices.length > 0) {
+          setVoiceId(data.voices[0].id);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching voices:", error);
+      // Fallback to mock voices
+      setVoices([
+        { id: "voice-1", name: "Sofia", language: "Spanish" },
+        { id: "voice-2", name: "Carlos", language: "Spanish" },
+        { id: "voice-3", name: "María", language: "Spanish" },
+      ]);
+    } finally {
+      setIsLoadingVoices(false);
+    }
+  };
+
+  const handlePreviewVoice = async () => {
+    if (!voiceId || isPreviewPlaying) return;
+
+    setIsPreviewPlaying(true);
+    try {
+      const response = await fetch("/api/voices/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voiceId,
+          text: language.startsWith("es")
+            ? "Hola, soy tu asistente virtual. ¿En qué puedo ayudarte?"
+            : language.startsWith("pt")
+            ? "Olá, sou seu assistente virtual. Como posso ajudá-lo?"
+            : "Hello, I'm your virtual assistant. How can I help you?",
+        }),
+      });
+
+      const data = await response.json();
+      if (data.audioBase64) {
+        const audio = new Audio(data.audioBase64);
+        audio.play();
+        audio.onended = () => setIsPreviewPlaying(false);
+      } else {
+        setIsPreviewPlaying(false);
+      }
+    } catch (error) {
+      console.error("Error playing preview:", error);
+      toast.error("Error al reproducir la vista previa");
+      setIsPreviewPlaying(false);
+    }
+  };
 
   const toggleTool = (toolId: string) => {
     setEnabledTools((prev) =>
@@ -71,9 +162,35 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Save agent
+
+    if (!name.trim()) {
+      toast.error("Por favor ingresa un nombre para el agente");
+      return;
+    }
+
+    // TODO: Save agent to API with language
+    const agentData = {
+      name,
+      template,
+      tone,
+      language, // This is sent to the API
+      voiceId,
+      enabledTools,
+      goals,
+      isActive,
+    };
+
+    console.log("Saving agent with language:", agentData);
+
+    // In production:
+    // await fetch("/api/agents", {
+    //   method: agent ? "PUT" : "POST",
+    //   body: JSON.stringify(agentData),
+    // });
+
+    toast.success(agent ? "Agente actualizado" : "Agente creado");
     onSave();
   };
 
@@ -81,7 +198,7 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Basic Info */}
       <div className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="name">{UI.agents.fields.name}</Label>
             <Input
@@ -90,13 +207,14 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
               onChange={(e) => setName(e.target.value)}
               placeholder="Mi agente de ventas"
               required
+              className="h-11"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="template">{UI.agents.fields.template}</Label>
             <Select value={template} onValueChange={setTemplate}>
-              <SelectTrigger>
+              <SelectTrigger className="h-11">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -110,11 +228,37 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        {/* Language - NEW */}
+        <div className="space-y-2">
+          <Label htmlFor="language" className="flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            Idioma del agente
+          </Label>
+          <Select value={language} onValueChange={setLanguage}>
+            <SelectTrigger className="h-11">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {agentLanguages.map((lang) => (
+                <SelectItem key={lang.value} value={lang.value}>
+                  <span className="flex items-center gap-2">
+                    <span>{lang.flag}</span>
+                    <span>{lang.label}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            El agente responderá a los clientes en este idioma
+          </p>
+        </div>
+
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="tone">{UI.agents.fields.tone}</Label>
             <Select value={tone} onValueChange={setTone}>
-              <SelectTrigger>
+              <SelectTrigger className="h-11">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -130,20 +274,38 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
           <div className="space-y-2">
             <Label htmlFor="voice">{UI.agents.fields.voice}</Label>
             <div className="flex gap-2">
-              <Select value={voiceId} onValueChange={setVoiceId}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Seleccionar voz" />
+              <Select value={voiceId} onValueChange={setVoiceId} disabled={isLoadingVoices}>
+                <SelectTrigger className="flex-1 h-11">
+                  {isLoadingVoices ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando...
+                    </span>
+                  ) : (
+                    <SelectValue placeholder="Seleccionar voz" />
+                  )}
                 </SelectTrigger>
                 <SelectContent>
-                  {mockVoices.map((voice) => (
+                  {voices.map((voice) => (
                     <SelectItem key={voice.id} value={voice.id}>
-                      {voice.name} ({voice.language})
+                      {voice.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Button type="button" variant="outline" size="icon" disabled={!voiceId}>
-                <Play className="h-4 w-4" />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={!voiceId || isPreviewPlaying}
+                onClick={handlePreviewVoice}
+                className="h-11 w-11 shrink-0"
+              >
+                {isPreviewPlaying ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
               </Button>
             </div>
           </div>
@@ -161,6 +323,7 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
           onChange={(e) => setGoals(e.target.value)}
           placeholder="Describe los objetivos del agente. Por ejemplo: Agendar citas con prospectos interesados, responder preguntas sobre productos..."
           rows={3}
+          className="resize-none"
         />
       </div>
 
@@ -169,15 +332,15 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
       {/* Tools */}
       <div className="space-y-4">
         <Label>{UI.agents.fields.tools}</Label>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
           {tools.map((tool) => (
             <div
               key={tool.id}
-              className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50"
+              className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
               onClick={() => toggleTool(tool.id)}
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                   <tool.icon className="h-4 w-4 text-primary" />
                 </div>
                 <span className="font-medium text-sm">{tool.label}</span>
@@ -205,13 +368,12 @@ export function AgentEditor({ agent, onSave, onCancel }: AgentEditorProps) {
       </div>
 
       {/* Actions */}
-      <div className="flex justify-end gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
+      <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto">
           {UI.common.cancel}
         </Button>
-        <Button type="submit">{UI.common.save}</Button>
+        <Button type="submit" className="w-full sm:w-auto">{UI.common.save}</Button>
       </div>
     </form>
   );
 }
-

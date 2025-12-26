@@ -14,7 +14,7 @@ function generateSlug(name: string): string {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, industry, timezone } = body;
+    const { name, industry, timezone, language } = body;
 
     // Validate required fields
     if (!name || typeof name !== "string" || !name.trim()) {
@@ -36,6 +36,10 @@ export async function POST(req: Request) {
     const timestamp = Date.now().toString(36);
     const slug = `${baseSlug}-${timestamp}`;
 
+    // Validate language (default to Spanish if not provided)
+    const validLanguages = ["es", "en", "pt"];
+    const workspaceLanguage = validLanguages.includes(language) ? language : "es";
+
     // TODO: Get current user from Clerk and create workspace in database
     // For now, we'll simulate workspace creation
     
@@ -46,6 +50,7 @@ export async function POST(req: Request) {
     //     name: name.trim(),
     //     slug,
     //     timezone: timezone || "America/Mexico_City",
+    //     language: workspaceLanguage,
     //     members: {
     //       create: {
     //         userId: user.id,
@@ -63,6 +68,7 @@ export async function POST(req: Request) {
       slug,
       industry,
       timezone: timezone || "America/Mexico_City",
+      language: workspaceLanguage,
     });
 
     // Simulate workspace creation with generated ID

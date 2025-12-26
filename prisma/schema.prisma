@@ -23,6 +23,7 @@ model Workspace {
   billingRegion       String   @default("NA")
   billingCountry      String?
   timezone            String   @default("America/Mexico_City")
+  language            String   @default("es") // System UI language: es, en, pt
   liveModeEnabled     Boolean  @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -535,6 +536,7 @@ model Agent {
   description         String?
   systemPrompt        String?   @db.Text
   tone                String    @default("professional")
+  language            String    @default("es-MX") // Agent response language
   voiceId             String?
   goals               String[]  @default([])
   enabledTools        String[]  @default([])

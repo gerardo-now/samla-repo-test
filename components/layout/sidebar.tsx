@@ -17,11 +17,19 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  Menu,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LiveModeToggle } from "@/components/layout/live-mode-toggle";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const mainNavItems = [
   { href: "/home", icon: Home, label: UI.nav.home },
@@ -39,14 +47,106 @@ const bottomNavItems = [
   { href: "/admin", icon: Shield, label: UI.nav.admin },
 ];
 
-export function Sidebar() {
+// Mobile Sidebar
+function MobileSidebar() {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  // Close sheet on navigation
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden fixed top-3 left-3 z-50 h-10 w-10 bg-background/80 backdrop-blur-sm border shadow-sm"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="p-0 w-72">
+        <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
+        <div className="flex flex-col h-full bg-sidebar">
+          {/* Logo */}
+          <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
+            <Link href="/home" className="flex items-center gap-2" onClick={() => setOpen(false)}>
+              <span className="text-xl font-bold text-primary tracking-tight">SAMLA</span>
+            </Link>
+          </div>
+
+          {/* Live Mode Toggle */}
+          <div className="px-3 py-4">
+            <LiveModeToggle collapsed={false} />
+          </div>
+
+          <Separator />
+
+          {/* Main Navigation */}
+          <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
+            {mainNavItems.map((item) => {
+              const isActive = pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <item.icon className="h-5 w-5 shrink-0" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <Separator />
+
+          {/* Bottom Navigation */}
+          <nav className="px-2 py-4 space-y-1">
+            {bottomNavItems.map((item) => {
+              const isActive = pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <item.icon className="h-5 w-5 shrink-0" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// Desktop Sidebar
+function DesktopSidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
   return (
     <aside
       className={cn(
-        "flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
+        "hidden md:flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
         collapsed ? "w-16" : "w-64"
       )}
     >
@@ -125,3 +225,11 @@ export function Sidebar() {
   );
 }
 
+export function Sidebar() {
+  return (
+    <>
+      <MobileSidebar />
+      <DesktopSidebar />
+    </>
+  );
+}
