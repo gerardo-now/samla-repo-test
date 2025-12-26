@@ -166,18 +166,21 @@ model PhoneNumber {
   phoneNumber   String
   friendlyName  String?
   country       String?
-  externalId    String?  // Provider's SID
+  externalId    String?  // Provider's SID (Twilio)
+  agentId       String?  // Connected AI agent for this number
   capabilities  Json     @default("{\"voice\":true,\"sms\":false}")
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent         Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
   callSessions  CallSession[]
 
   @@unique([externalId])
   @@index([workspaceId])
   @@index([phoneNumber])
+  @@index([agentId])
 }
 
 model CallerId {
@@ -185,14 +188,17 @@ model CallerId {
   workspaceId   String
   phoneNumber   String
   friendlyName  String?
+  agentId       String?  // Connected AI agent for outbound calls
   isVerified    Boolean  @default(false)
   isDefault     Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent         Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
+  @@index([agentId])
 }
 
 // ============================================================================
@@ -549,6 +555,8 @@ model Agent {
   voice               Voice?    @relation(fields: [voiceId], references: [id], onDelete: SetNull)
   versions            AgentVersion[]
   conversations       Conversation[]
+  phoneNumbers        PhoneNumber[]   // Phone numbers assigned to this agent
+  callerIds           CallerId[]      // Caller IDs assigned to this agent
 
   @@index([workspaceId])
   @@index([isActive])

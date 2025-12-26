@@ -7,6 +7,7 @@ import { GeneralSettings } from "@/components/settings/general-settings";
 import { TeamSettings } from "@/components/settings/team-settings";
 import { ChannelsSettings } from "@/components/settings/channels-settings";
 import { CallerIdSettings } from "@/components/settings/caller-id-settings";
+import { PhoneNumbersSettings } from "@/components/settings/phone-numbers-settings";
 import { CalendarSettings } from "@/components/settings/calendar-settings";
 import { VoicesSettings } from "@/components/settings/voices-settings";
 import { TemplatesSettings } from "@/components/settings/templates-settings";
@@ -21,6 +22,7 @@ export function SettingsView() {
         <TabsTrigger value="general">{UI.settings.tabs.general}</TabsTrigger>
         <TabsTrigger value="team">{UI.settings.tabs.team}</TabsTrigger>
         <TabsTrigger value="channels">{UI.settings.tabs.channels}</TabsTrigger>
+        <TabsTrigger value="phoneNumbers">Llamadas</TabsTrigger>
         <TabsTrigger value="callerId">{UI.settings.tabs.callerId}</TabsTrigger>
         <TabsTrigger value="calendar">{UI.settings.tabs.calendar}</TabsTrigger>
         <TabsTrigger value="voices">{UI.settings.tabs.voices}</TabsTrigger>
@@ -38,6 +40,10 @@ export function SettingsView() {
 
       <TabsContent value="channels">
         <ChannelsSettings />
+      </TabsContent>
+
+      <TabsContent value="phoneNumbers">
+        <PhoneNumbersSettings />
       </TabsContent>
 
       <TabsContent value="callerId">
