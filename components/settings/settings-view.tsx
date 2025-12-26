@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { UI } from "@/lib/copy/uiStrings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettings } from "@/components/settings/general-settings";
@@ -13,11 +14,45 @@ import { VoicesSettings } from "@/components/settings/voices-settings";
 import { TemplatesSettings } from "@/components/settings/templates-settings";
 import { BillingSettings } from "@/components/settings/billing-settings";
 
+const validTabs = ["general", "team", "channels", "phoneNumbers", "callerId", "calendar", "voices", "templates", "billing"];
+
 export function SettingsView() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("general");
 
+  // Read tab from URL hash on mount and when it changes
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (hash && validTabs.includes(hash)) {
+        setActiveTab(hash);
+      }
+    };
+
+    // Check on mount
+    handleHashChange();
+
+    // Listen for hash changes
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  // Also check URL search params (?tab=xxx)
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && validTabs.includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  // Update URL hash when tab changes
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    window.history.replaceState(null, "", `#${value}`);
+  };
+
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
       <TabsList className="flex-wrap h-auto gap-2">
         <TabsTrigger value="general">{UI.settings.tabs.general}</TabsTrigger>
         <TabsTrigger value="team">{UI.settings.tabs.team}</TabsTrigger>

@@ -42,7 +42,7 @@ const checklistItems: ChecklistItem[] = [
     description: "Vincula tu WhatsApp Business",
     whyItMatters: "Para recibir mensajes de clientes directamente en SAMLA y que tus agentes puedan responder automáticamente.",
     icon: MessageSquare,
-    href: "/settings?tab=channels",
+    href: "/settings#channels",
     completed: false,
   },
   {
@@ -51,7 +51,7 @@ const checklistItems: ChecklistItem[] = [
     description: "Activa las llamadas telefónicas",
     whyItMatters: "Para que tus agentes de IA puedan recibir y realizar llamadas con voz humana.",
     icon: Phone,
-    href: "/settings?tab=channels",
+    href: "/settings#channels",
     completed: false,
   },
   {
