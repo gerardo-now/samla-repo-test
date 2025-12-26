@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validateWorkspaceName, isReservedSlug } from "@/lib/validation/reservedNames";
 
 // Helper to generate slug from name
 function generateSlug(name: string): string {
@@ -24,6 +25,15 @@ export async function POST(req: Request) {
       );
     }
 
+    // Validate workspace name (check for reserved names)
+    const nameValidation = validateWorkspaceName(name);
+    if (!nameValidation.isValid) {
+      return NextResponse.json(
+        { error: nameValidation.error },
+        { status: 400 }
+      );
+    }
+
     if (!industry || typeof industry !== "string") {
       return NextResponse.json(
         { error: "La industria es requerida" },
@@ -33,6 +43,15 @@ export async function POST(req: Request) {
 
     // Generate a unique slug
     const baseSlug = generateSlug(name);
+    
+    // Check if slug is reserved
+    if (isReservedSlug(baseSlug)) {
+      return NextResponse.json(
+        { error: "Este nombre genera una URL reservada. Por favor usa otro nombre." },
+        { status: 400 }
+      );
+    }
+    
     const timestamp = Date.now().toString(36);
     const slug = `${baseSlug}-${timestamp}`;
 
