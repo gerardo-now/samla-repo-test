@@ -70,17 +70,21 @@ export const env = {
   SUPER_ADMIN_EMAILS: getEnv("SUPER_ADMIN_EMAILS", "").split(",").filter(Boolean),
 };
 
-// Validate required env vars in production
-if (env.NODE_ENV === "production") {
-  const requiredVars = [
-    "DATABASE_URL",
-    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
-    "CLERK_SECRET_KEY",
+// Log missing env vars (don't crash - allow graceful degradation)
+if (typeof process !== "undefined") {
+  const checkVars = [
+    { name: "DATABASE_URL", required: true },
+    { name: "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", required: false },
+    { name: "CLERK_SECRET_KEY", required: false },
   ];
 
-  for (const varName of requiredVars) {
-    if (!env[varName]) {
-      console.warn(`Warning: ${varName} is not set`);
+  for (const { name, required } of checkVars) {
+    if (!env[name]) {
+      if (required) {
+        console.error(`ERROR: ${name} is required but not set`);
+      } else {
+        console.warn(`Warning: ${name} is not set - feature will be disabled`);
+      }
     }
   }
 }
