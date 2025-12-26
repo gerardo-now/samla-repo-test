@@ -18,11 +18,15 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma client
+# Generate Prisma client (dummy URL for build - real URL comes from env at runtime)
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 RUN npx prisma generate
 
 # Build the application
+# Set dummy values for required env vars during build
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
+ARG NEXT_PUBLIC_APP_URL=""
 RUN npm run build
 
 # Production image, copy all the files and run next
