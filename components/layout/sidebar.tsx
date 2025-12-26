@@ -1,0 +1,127 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { UI } from "@/lib/copy/uiStrings";
+import {
+  Home,
+  Inbox,
+  Users,
+  Search,
+  Bot,
+  BookOpen,
+  Calendar,
+  Zap,
+  Settings,
+  Shield,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { useState } from "react";
+import { LiveModeToggle } from "@/components/layout/live-mode-toggle";
+
+const mainNavItems = [
+  { href: "/home", icon: Home, label: UI.nav.home },
+  { href: "/inbox", icon: Inbox, label: UI.nav.inbox },
+  { href: "/contacts", icon: Users, label: UI.nav.contacts },
+  { href: "/leads", icon: Search, label: UI.nav.leads },
+  { href: "/agents", icon: Bot, label: UI.nav.agents },
+  { href: "/knowledge", icon: BookOpen, label: UI.nav.knowledge },
+  { href: "/calendar", icon: Calendar, label: UI.nav.calendar },
+  { href: "/triggers", icon: Zap, label: UI.nav.triggers },
+];
+
+const bottomNavItems = [
+  { href: "/settings", icon: Settings, label: UI.nav.settings },
+  { href: "/admin", icon: Shield, label: UI.nav.admin },
+];
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <aside
+      className={cn(
+        "flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
+        collapsed ? "w-16" : "w-64"
+      )}
+    >
+      {/* Logo */}
+      <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
+        {!collapsed && (
+          <Link href="/home" className="flex items-center gap-2">
+            <span className="text-xl font-bold text-primary tracking-tight">SAMLA</span>
+          </Link>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setCollapsed(!collapsed)}
+          className="h-8 w-8 shrink-0"
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </Button>
+      </div>
+
+      {/* Live Mode Toggle */}
+      <div className={cn("px-3 py-4", collapsed && "flex justify-center")}>
+        <LiveModeToggle collapsed={collapsed} />
+      </div>
+
+      <Separator />
+
+      {/* Main Navigation */}
+      <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-thin">
+        {mainNavItems.map((item) => {
+          const isActive = pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+              title={collapsed ? item.label : undefined}
+            >
+              <item.icon className="h-5 w-5 shrink-0" />
+              {!collapsed && <span>{item.label}</span>}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <Separator />
+
+      {/* Bottom Navigation */}
+      <nav className="px-2 py-4 space-y-1">
+        {bottomNavItems.map((item) => {
+          const isActive = pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+              title={collapsed ? item.label : undefined}
+            >
+              <item.icon className="h-5 w-5 shrink-0" />
+              {!collapsed && <span>{item.label}</span>}
+            </Link>
+          );
+        })}
+      </nav>
+    </aside>
+  );
+}
+
