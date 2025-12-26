@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,13 +18,13 @@ import {
   Phone,
   Link2,
   Unlink,
-  QrCode,
   CheckCircle2,
   Loader2,
   ExternalLink,
   Smartphone,
+  RefreshCw,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface ConnectedChannel {
   id: string;
@@ -36,51 +35,107 @@ interface ConnectedChannel {
   connectedAt?: Date;
 }
 
-// Mock data - in production this comes from API
-const mockChannels: ConnectedChannel[] = [];
+// Mock workspace ID - in production this comes from context/auth
+const WORKSPACE_ID = "demo-workspace";
+const WORKSPACE_NAME = "Mi Empresa";
 
 export function ChannelsSettings() {
-  const [channels, setChannels] = useState<ConnectedChannel[]>(mockChannels);
+  const [channels, setChannels] = useState<ConnectedChannel[]>([]);
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showPhoneDialog, setShowPhoneDialog] = useState(false);
-  const [connectionStep, setConnectionStep] = useState<"info" | "qr" | "verify" | "success">("info");
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [setupUrl, setSetupUrl] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
 
   const whatsappConnected = channels.some(c => c.type === "whatsapp" && c.isConnected);
   const phoneConnected = channels.some(c => c.type === "phone" && c.isConnected);
 
+  // Check connection status on mount
+  useEffect(() => {
+    checkWhatsAppStatus();
+  }, []);
+
+  const checkWhatsAppStatus = async () => {
+    setIsChecking(true);
+    try {
+      const response = await fetch(
+        `/api/channels/whatsapp/connect?workspaceId=${WORKSPACE_ID}`
+      );
+      const data = await response.json();
+
+      if (data.connected && data.phoneNumbers?.length > 0) {
+        setChannels(prev => {
+          // Remove old WhatsApp channels and add new ones
+          const nonWhatsApp = prev.filter(c => c.type !== "whatsapp");
+          const newWhatsApp = data.phoneNumbers.map((pn: { id: string; phoneNumber: string; displayName?: string }) => ({
+            id: pn.id,
+            type: "whatsapp" as const,
+            name: pn.displayName || "WhatsApp Business",
+            phoneNumber: pn.phoneNumber,
+            isConnected: true,
+            connectedAt: new Date(),
+          }));
+          return [...nonWhatsApp, ...newWhatsApp];
+        });
+      }
+    } catch (error) {
+      console.error("Error checking WhatsApp status:", error);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
   const handleConnectWhatsApp = async () => {
-    setConnectionStep("info");
     setShowWhatsAppDialog(true);
+    setSetupUrl(null);
+    setIsConnecting(true);
+
+    try {
+      const response = await fetch("/api/channels/whatsapp/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: WORKSPACE_ID,
+          workspaceName: WORKSPACE_NAME,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.setupUrl) {
+        setSetupUrl(data.setupUrl);
+      } else {
+        toast.error(data.error || "Error al generar enlace de configuración");
+        setShowWhatsAppDialog(false);
+      }
+    } catch (error) {
+      console.error("Error connecting WhatsApp:", error);
+      toast.error("Error al conectar WhatsApp");
+      setShowWhatsAppDialog(false);
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
-  const startWhatsAppConnection = async () => {
-    setIsConnecting(true);
-    setConnectionStep("qr");
-    
-    // Simulate QR code generation - in production calls /api/channels/whatsapp/connect
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsConnecting(false);
+  const openSetupLink = () => {
+    if (setupUrl) {
+      window.open(setupUrl, "_blank", "noopener,noreferrer");
+      toast.info("Completa la configuración en la nueva ventana");
+    }
   };
 
-  const simulateWhatsAppVerify = async () => {
-    setIsConnecting(true);
-    setConnectionStep("verify");
+  const handleVerifyConnection = async () => {
+    setIsChecking(true);
+    await checkWhatsAppStatus();
     
-    // Simulate verification - in production polls /api/channels/whatsapp/status
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    setConnectionStep("success");
-    setChannels(prev => [...prev, {
-      id: "wa-1",
-      type: "whatsapp",
-      name: "WhatsApp Business",
-      phoneNumber: "+52 55 1234 5678",
-      isConnected: true,
-      connectedAt: new Date(),
-    }]);
-    setIsConnecting(false);
+    if (whatsappConnected) {
+      toast.success("¡WhatsApp conectado exitosamente!");
+      setShowWhatsAppDialog(false);
+    } else {
+      toast.info("Aún no detectamos la conexión. Completa el proceso en la otra ventana.");
+    }
+    setIsChecking(false);
   };
 
   const handleConnectPhone = () => {
@@ -99,16 +154,18 @@ export function ChannelsSettings() {
       id: "phone-1",
       type: "phone",
       name: "Línea principal",
-      phoneNumber: phoneNumber,
+      phoneNumber: `+52 ${phoneNumber}`,
       isConnected: true,
       connectedAt: new Date(),
     }]);
     setIsConnecting(false);
     setShowPhoneDialog(false);
+    toast.success("Número telefónico activado");
   };
 
   const handleDisconnect = (channelId: string) => {
     setChannels(prev => prev.filter(c => c.id !== channelId));
+    toast.success("Canal desconectado");
   };
 
   return (
@@ -116,16 +173,28 @@ export function ChannelsSettings() {
       {/* WhatsApp Section */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-              <MessageSquare className="h-5 w-5 text-green-600" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                <MessageSquare className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <CardTitle>WhatsApp Business</CardTitle>
+                <CardDescription>
+                  Recibe y envía mensajes desde tu número de WhatsApp Business
+                </CardDescription>
+              </div>
             </div>
-            <div>
-              <CardTitle>WhatsApp Business</CardTitle>
-              <CardDescription>
-                Recibe y envía mensajes desde tu número de WhatsApp Business
-              </CardDescription>
-            </div>
+            {!whatsappConnected && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={checkWhatsAppStatus}
+                disabled={isChecking}
+              >
+                <RefreshCw className={`h-4 w-4 ${isChecking ? "animate-spin" : ""}`} />
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -233,87 +302,72 @@ export function ChannelsSettings() {
         </CardContent>
       </Card>
 
-      {/* WhatsApp Connection Dialog */}
+      {/* WhatsApp Connection Dialog - Updated for Setup Links */}
       <Dialog open={showWhatsAppDialog} onOpenChange={setShowWhatsAppDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {connectionStep === "success" ? "¡WhatsApp conectado!" : "Conectar WhatsApp Business"}
-            </DialogTitle>
+            <DialogTitle>Conectar WhatsApp Business</DialogTitle>
             <DialogDescription>
-              {connectionStep === "info" && "Vincula tu cuenta de WhatsApp Business para empezar a recibir mensajes"}
-              {connectionStep === "qr" && "Escanea el código QR con tu teléfono"}
-              {connectionStep === "verify" && "Verificando conexión..."}
-              {connectionStep === "success" && "Tu WhatsApp Business está listo para recibir mensajes"}
+              Vincula tu cuenta de WhatsApp Business para empezar a recibir mensajes
             </DialogDescription>
           </DialogHeader>
 
           <div className="py-6">
-            {connectionStep === "info" && (
-              <div className="space-y-4">
-                <div className="p-4 rounded-lg bg-muted">
-                  <h4 className="font-medium mb-2">Requisitos:</h4>
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• Cuenta de WhatsApp Business activa</li>
-                    <li>• Acceso a tu teléfono para escanear el código QR</li>
-                    <li>• Número no vinculado a otra plataforma</li>
-                  </ul>
-                </div>
-                <Button onClick={startWhatsAppConnection} className="w-full" disabled={isConnecting}>
-                  {isConnecting ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <QrCode className="h-4 w-4 mr-2" />
-                  )}
-                  Generar código QR
-                </Button>
-              </div>
-            )}
-
-            {connectionStep === "qr" && (
-              <div className="text-center space-y-4">
-                {isConnecting ? (
-                  <div className="flex items-center justify-center h-48">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : (
-                  <>
-                    {/* Placeholder QR code - in production this is a real QR */}
-                    <div className="w-48 h-48 mx-auto bg-white border-2 rounded-lg flex items-center justify-center">
-                      <QrCode className="h-32 w-32 text-gray-800" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Abre WhatsApp en tu teléfono → Dispositivos vinculados → Vincular un dispositivo
-                    </p>
-                    <Button onClick={simulateWhatsAppVerify} disabled={isConnecting}>
-                      {isConnecting ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : null}
-                      Ya escaneé el código
-                    </Button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {connectionStep === "verify" && (
+            {isConnecting ? (
               <div className="text-center py-8">
                 <Loader2 className="h-12 w-12 mx-auto animate-spin text-primary mb-4" />
-                <p className="text-muted-foreground">Verificando conexión...</p>
+                <p className="text-muted-foreground">Generando enlace de configuración...</p>
               </div>
-            )}
-
-            {connectionStep === "success" && (
-              <div className="text-center py-4">
-                <div className="w-16 h-16 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
-                  <CheckCircle2 className="h-8 w-8 text-green-600" />
+            ) : setupUrl ? (
+              <div className="space-y-6">
+                {/* Instructions */}
+                <div className="p-4 rounded-lg bg-muted space-y-3">
+                  <h4 className="font-medium">Instrucciones:</h4>
+                  <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                    <li>Haz clic en el botón de abajo para abrir la configuración</li>
+                    <li>Inicia sesión con tu cuenta de Facebook/Meta</li>
+                    <li>Selecciona tu cuenta de WhatsApp Business</li>
+                    <li>Verifica tu número de teléfono</li>
+                    <li>Regresa aquí y haz clic en "Verificar conexión"</li>
+                  </ol>
                 </div>
-                <p className="font-medium mb-1">+52 55 1234 5678</p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Tu WhatsApp Business está conectado y listo
+
+                {/* Open Setup Link Button */}
+                <Button onClick={openSetupLink} className="w-full" size="lg">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Abrir configuración de WhatsApp
+                </Button>
+
+                {/* Requirements notice */}
+                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    <strong>Importante:</strong> Necesitas una cuenta de WhatsApp Business 
+                    vinculada a Facebook/Meta Business Suite.
+                  </p>
+                </div>
+
+                {/* Verify Button */}
+                <Button
+                  variant="outline"
+                  onClick={handleVerifyConnection}
+                  disabled={isChecking}
+                  className="w-full"
+                >
+                  {isChecking ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                  )}
+                  Ya completé la configuración
+                </Button>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">
+                  Error al generar el enlace. Por favor intenta de nuevo.
                 </p>
-                <Button onClick={() => setShowWhatsAppDialog(false)}>
-                  Continuar
+                <Button onClick={handleConnectWhatsApp} className="mt-4">
+                  Reintentar
                 </Button>
               </div>
             )}

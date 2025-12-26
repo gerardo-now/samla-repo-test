@@ -1,17 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  createKapsoCustomer,
+  getKapsoCustomerByExternalId,
+  generateSetupLink,
+  listPhoneNumbers,
+} from "@/lib/providers/kapsoProvider";
 
-// This API uses Kapso Platform internally for WhatsApp Business
-// The provider name is NEVER exposed to the frontend
+/**
+ * WhatsApp Connection API
+ * 
+ * Uses Kapso Platform internally for WhatsApp Business connectivity.
+ * Flow based on: https://docs.kapso.ai/docs/platform/getting-started
+ * 
+ * The provider name (Kapso) is NEVER exposed to the frontend.
+ */
 
 interface ConnectRequest {
   workspaceId: string;
+  workspaceName: string;
 }
 
-// POST /api/channels/whatsapp/connect - Generate QR code for WhatsApp connection
+// POST /api/channels/whatsapp/connect - Generate setup link for WhatsApp connection
 export async function POST(req: NextRequest) {
   try {
     const body: ConnectRequest = await req.json();
-    const { workspaceId } = body;
+    const { workspaceId, workspaceName } = body;
 
     if (!workspaceId) {
       return NextResponse.json(
@@ -20,65 +33,92 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // In production: Use Kapso API to generate QR code
-    // const response = await fetch('https://api.kapso.io/v1/whatsapp/qr', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Authorization': `Bearer ${process.env.KAPSO_API_KEY}`,
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({
-    //     workspace_id: workspaceId,
-    //     webhook_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`,
-    //   }),
-    // });
-    // const data = await response.json();
+    // Check if Kapso API key is configured
+    if (!process.env.KAPSO_API_KEY) {
+      console.error("KAPSO_API_KEY not configured");
+      return NextResponse.json(
+        { error: "Servicio de mensajería no configurado" },
+        { status: 503 }
+      );
+    }
 
-    // For demo: Return simulated QR data
-    const sessionId = `session_${Date.now()}`;
-    
+    // Step 1: Check if customer already exists in Kapso
+    let kapsoCustomer = await getKapsoCustomerByExternalId(workspaceId);
+
+    // Step 2: Create customer if not exists
+    if (!kapsoCustomer) {
+      kapsoCustomer = await createKapsoCustomer(
+        workspaceId,
+        workspaceName || "Workspace"
+      );
+    }
+
+    // Step 3: Generate setup link
+    const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=channels&connected=whatsapp`;
+    const setupLink = await generateSetupLink(kapsoCustomer.id, redirectUrl);
+
     return NextResponse.json({
       success: true,
-      sessionId,
-      // In production: qrCode would be base64 or URL from Kapso
-      qrCode: null, // Will be fetched via polling
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes
+      setupUrl: setupLink.url,
+      expiresAt: setupLink.expires_at,
+      message: "Abre el enlace para conectar tu WhatsApp Business",
     });
 
   } catch (error) {
-    console.error("Error generating WhatsApp QR:", error);
+    console.error("Error generating WhatsApp setup link:", error);
     return NextResponse.json(
-      { error: "Error al generar código QR" },
+      { error: "Error al generar enlace de configuración" },
       { status: 500 }
     );
   }
 }
 
-// GET /api/channels/whatsapp/connect?sessionId=xxx - Check connection status
+// GET /api/channels/whatsapp/connect?workspaceId=xxx - Check connection status
 export async function GET(req: NextRequest) {
   try {
-    const sessionId = req.nextUrl.searchParams.get("sessionId");
+    const workspaceId = req.nextUrl.searchParams.get("workspaceId");
 
-    if (!sessionId) {
+    if (!workspaceId) {
       return NextResponse.json(
-        { error: "Session ID requerido" },
+        { error: "Workspace ID requerido" },
         { status: 400 }
       );
     }
 
-    // In production: Poll Kapso API for connection status
-    // const response = await fetch(`https://api.kapso.io/v1/whatsapp/status/${sessionId}`, {
-    //   headers: {
-    //     'Authorization': `Bearer ${process.env.KAPSO_API_KEY}`,
-    //   },
-    // });
-    // const data = await response.json();
+    // Check if Kapso API key is configured
+    if (!process.env.KAPSO_API_KEY) {
+      return NextResponse.json({
+        success: true,
+        connected: false,
+        phoneNumbers: [],
+      });
+    }
 
-    // For demo: Simulate status
+    // Get Kapso customer
+    const kapsoCustomer = await getKapsoCustomerByExternalId(workspaceId);
+
+    if (!kapsoCustomer) {
+      return NextResponse.json({
+        success: true,
+        connected: false,
+        phoneNumbers: [],
+      });
+    }
+
+    // List connected phone numbers
+    const phoneNumbers = await listPhoneNumbers(kapsoCustomer.id);
+    const activePhoneNumbers = phoneNumbers.filter(
+      (pn) => pn.status === "active"
+    );
+
     return NextResponse.json({
       success: true,
-      status: "pending", // "pending" | "connected" | "expired"
-      qrCode: "data:image/png;base64,iVBORw0KGgo...", // Base64 QR image
+      connected: activePhoneNumbers.length > 0,
+      phoneNumbers: activePhoneNumbers.map((pn) => ({
+        id: pn.id,
+        phoneNumber: pn.phone_number,
+        displayName: pn.display_name,
+      })),
     });
 
   } catch (error) {
@@ -89,4 +129,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
