@@ -2,13 +2,13 @@ import { UI } from "@/lib/copy/uiStrings";
 import { OnboardingChecklist } from "@/components/home/onboarding-checklist";
 import { QuickStats } from "@/components/home/quick-stats";
 import { RecentActivity } from "@/components/home/recent-activity";
-import { WelcomeModal } from "@/components/home/welcome-modal";
+import { OnboardingWizard } from "@/components/home/onboarding-wizard";
 
 export default function HomePage() {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Welcome Modal for first-time users */}
-      <WelcomeModal />
+      {/* Onboarding wizard for first-time users */}
+      <OnboardingWizard />
 
       {/* Welcome Header */}
       <div className="space-y-2">

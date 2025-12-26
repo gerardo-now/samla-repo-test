@@ -57,6 +57,9 @@ model Workspace {
   // Onboarding
   onboardingChecklist OnboardingChecklist?
 
+  // Invitations
+  invitations         WorkspaceInvitation[]
+
   @@index([slug])
 }
 
@@ -73,6 +76,7 @@ model User {
 
   memberships   WorkspaceMember[]
   auditLogs     AuditLog[]
+  sentInvitations WorkspaceInvitation[]
 
   @@index([clerkId])
   @@index([email])
@@ -98,6 +102,34 @@ enum MemberRole {
   OWNER
   ADMIN
   MEMBER
+}
+
+model WorkspaceInvitation {
+  id          String            @id @default(cuid())
+  workspaceId String
+  email       String
+  role        MemberRole        @default(MEMBER)
+  status      InvitationStatus  @default(PENDING)
+  token       String            @unique @default(cuid())
+  expiresAt   DateTime
+  invitedById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User?             @relation(fields: [invitedById], references: [id])
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId])
+  @@index([email])
+  @@index([token])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
 }
 
 // ============================================================================
