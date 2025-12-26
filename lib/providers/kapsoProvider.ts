@@ -98,6 +98,20 @@ export async function generateSetupLink(
   kapsoCustomerId: string,
   redirectUrl?: string
 ): Promise<KapsoSetupLink> {
+  // #region agent log
+  fetch('http://127.0.0.1:7249/ingest/46f253e4-af93-4a18-af5e-39a9403a9c24',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'kapsoProvider.ts:generateSetupLink:entry',message:'Function entry',data:{kapsoCustomerId,redirectUrl,redirectUrlType:typeof redirectUrl,redirectUrlLength:redirectUrl?.length,hasApiKey:!!KAPSO_API_KEY,apiKeyLength:KAPSO_API_KEY?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,D,E'})}).catch(()=>{});
+  // #endregion
+
+  const requestBody = {
+    setup_link: {
+      redirect_url: redirectUrl,
+    },
+  };
+
+  // #region agent log
+  fetch('http://127.0.0.1:7249/ingest/46f253e4-af93-4a18-af5e-39a9403a9c24',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'kapsoProvider.ts:generateSetupLink:body',message:'Request body before stringify',data:{requestBody,stringifiedBody:JSON.stringify(requestBody),setupLinkKeys:Object.keys(requestBody.setup_link)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,C,D'})}).catch(()=>{});
+  // #endregion
+
   const response = await fetch(
     `${PLATFORM_API_URL}/customers/${kapsoCustomerId}/setup_links`,
     {
@@ -106,20 +120,26 @@ export async function generateSetupLink(
         "X-API-Key": KAPSO_API_KEY,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        setup_link: {
-          redirect_url: redirectUrl,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     }
   );
 
+  // #region agent log
+  fetch('http://127.0.0.1:7249/ingest/46f253e4-af93-4a18-af5e-39a9403a9c24',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'kapsoProvider.ts:generateSetupLink:response',message:'Kapso API response',data:{status:response.status,statusText:response.statusText,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B,C,E'})}).catch(()=>{});
+  // #endregion
+
   if (!response.ok) {
     const error = await response.text();
+    // #region agent log
+    fetch('http://127.0.0.1:7249/ingest/46f253e4-af93-4a18-af5e-39a9403a9c24',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'kapsoProvider.ts:generateSetupLink:error',message:'Kapso API error response',data:{error,status:response.status},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B,C,E'})}).catch(()=>{});
+    // #endregion
     throw new Error(`Failed to generate setup link: ${error}`);
   }
 
   const result: KapsoResponse<KapsoSetupLink> = await response.json();
+  // #region agent log
+  fetch('http://127.0.0.1:7249/ingest/46f253e4-af93-4a18-af5e-39a9403a9c24',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'kapsoProvider.ts:generateSetupLink:success',message:'Setup link generated successfully',data:{resultData:result.data},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'success'})}).catch(()=>{});
+  // #endregion
   return result.data;
 }
 

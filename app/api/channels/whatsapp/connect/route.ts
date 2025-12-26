@@ -54,7 +54,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 3: Generate setup link
-    const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=channels&connected=whatsapp`;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const redirectUrl = `${appUrl}/settings?tab=channels&connected=whatsapp`;
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7249/ingest/46f253e4-af93-4a18-af5e-39a9403a9c24',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:POST:redirectUrl',message:'Checking redirect URL construction',data:{appUrl,appUrlType:typeof appUrl,appUrlEmpty:appUrl==='',redirectUrl,kapsoCustomerId:kapsoCustomer.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B'})}).catch(()=>{});
+    // #endregion
+    
     const setupLink = await generateSetupLink(kapsoCustomer.id, redirectUrl);
 
     return NextResponse.json({
