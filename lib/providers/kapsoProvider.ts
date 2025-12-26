@@ -7,6 +7,8 @@
  * INTERNAL USE ONLY - Never expose provider name to UI
  */
 
+import { createHmac } from "crypto";
+
 const KAPSO_API_KEY = process.env.KAPSO_API_KEY || "";
 const PLATFORM_API_URL = "https://api.kapso.ai/platform/v1";
 const WHATSAPP_API_URL = "https://api.kapso.ai/meta/whatsapp";
@@ -291,9 +293,7 @@ export function verifyWebhookSignature(
   const webhookSecret = process.env.KAPSO_WEBHOOK_SECRET;
   if (!webhookSecret) return false;
 
-  const crypto = require("crypto");
-  const expectedSignature = crypto
-    .createHmac("sha256", webhookSecret)
+  const expectedSignature = createHmac("sha256", webhookSecret)
     .update(payload)
     .digest("hex");
 

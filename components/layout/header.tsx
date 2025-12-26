@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Bell, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -9,17 +9,14 @@ interface HeaderProps {
   title?: string;
 }
 
-// Check if Clerk is available
-function useClerkAvailable() {
-  const [available, setAvailable] = useState(false);
-
-  useEffect(() => {
-    const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-    const isValid = key && key.startsWith("pk_") && !key.includes("placeholder") && key.length > 50;
-    setAvailable(!!isValid);
-  }, []);
-
-  return available;
+function FallbackAvatar() {
+  return (
+    <Avatar className="h-9 w-9 cursor-pointer">
+      <AvatarFallback className="bg-primary/10">
+        <User className="h-5 w-5 text-primary" />
+      </AvatarFallback>
+    </Avatar>
+  );
 }
 
 // Dynamic import of Clerk components
@@ -28,9 +25,15 @@ function ClerkUserSection() {
   const [ClerkModule, setClerkModule] = useState<any>(null);
 
   useEffect(() => {
+    let mounted = true;
     import("@clerk/nextjs").then((mod) => {
-      setClerkModule(mod);
+      if (mounted) {
+        setClerkModule(mod);
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (!ClerkModule) {
@@ -60,18 +63,13 @@ function ClerkUserSection() {
   );
 }
 
-function FallbackAvatar() {
-  return (
-    <Avatar className="h-9 w-9 cursor-pointer">
-      <AvatarFallback className="bg-primary/10">
-        <User className="h-5 w-5 text-primary" />
-      </AvatarFallback>
-    </Avatar>
-  );
-}
-
 export function Header({ title }: HeaderProps) {
-  const clerkAvailable = useClerkAvailable();
+  // Check if Clerk is available - computed once on mount
+  const clerkAvailable = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    return !!(key && key.startsWith("pk_") && !key.includes("placeholder") && key.length > 50);
+  }, []);
 
   return (
     <header className="flex items-center justify-between h-16 px-6 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

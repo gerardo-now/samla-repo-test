@@ -328,7 +328,7 @@ export function ChannelsSettings() {
                     <li>Inicia sesión con tu cuenta de Facebook/Meta</li>
                     <li>Selecciona tu cuenta de WhatsApp Business</li>
                     <li>Verifica tu número de teléfono</li>
-                    <li>Regresa aquí y haz clic en "Verificar conexión"</li>
+                    <li>Regresa aquí y haz clic en &quot;Verificar conexión&quot;</li>
                   </ol>
                 </div>
 
