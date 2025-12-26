@@ -1,34 +1,38 @@
 "use client";
 
-import { ClerkProvider as BaseClerkProvider } from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { esES } from "@clerk/localizations";
-import { ReactNode } from "react";
+import { ReactNode, useMemo } from "react";
 
 interface ClerkProviderWrapperProps {
   children: ReactNode;
 }
 
-// Check if Clerk key is valid (not a placeholder)
-function isValidClerkKey(): boolean {
-  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  if (!key) return false;
-  if (!key.startsWith("pk_")) return false;
-  if (key.includes("placeholder")) return false;
-  if (key.includes("YOUR_")) return false;
-  if (key.length < 50) return false;
-  return true;
-}
-
 export function ClerkProviderWrapper({ children }: ClerkProviderWrapperProps) {
-  // If no valid Clerk key, render children without Clerk
-  if (!isValidClerkKey()) {
+  // Check if Clerk is properly configured
+  const isClerkConfigured = useMemo(() => {
+    const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    if (!key) return false;
+    if (!key.startsWith("pk_")) return false;
+    if (key.includes("placeholder") || key.includes("YOUR_")) return false;
+    if (key.length < 50) return false;
+    return true;
+  }, []);
+
+  // If Clerk is not configured, render children without provider
+  if (!isClerkConfigured) {
     return <>{children}</>;
   }
 
   return (
-    <BaseClerkProvider localization={esES}>
+    <ClerkProvider
+      localization={esES}
+      afterSignOutUrl="/"
+      signInFallbackRedirectUrl="/home"
+      signUpFallbackRedirectUrl="/home"
+    >
       {children}
-    </BaseClerkProvider>
+    </ClerkProvider>
   );
 }
 
