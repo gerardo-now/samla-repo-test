@@ -47,100 +47,98 @@
 }
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0.625rem;
   
-  /* SAMLA Brand Colors - Clean, minimal with blue accent */
-  --background: oklch(0.995 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* SAMLA Brand Colors - Clean, Light Blue Theme */
+  --background: #ffffff;
+  --foreground: #1e3a5f;
   
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  --card-foreground: #1e3a5f;
   
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover: #ffffff;
+  --popover-foreground: #1e3a5f;
   
   /* Primary - SAMLA Blue */
-  --primary: oklch(0.55 0.2 250);
-  --primary-foreground: oklch(0.98 0 0);
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
   
-  --secondary: oklch(0.965 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary: #f1f5f9;
+  --secondary-foreground: #1e3a5f;
   
-  --muted: oklch(0.965 0.005 250);
-  --muted-foreground: oklch(0.45 0 0);
+  --muted: #f8fafc;
+  --muted-foreground: #64748b;
   
-  --accent: oklch(0.95 0.02 250);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent: #eff6ff;
+  --accent-foreground: #1e40af;
   
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: #ef4444;
   
-  --border: oklch(0.915 0 0);
-  --input: oklch(0.915 0 0);
-  --ring: oklch(0.55 0.2 250);
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #2563eb;
   
   /* Charts */
-  --chart-1: oklch(0.55 0.2 250);
-  --chart-2: oklch(0.65 0.15 180);
-  --chart-3: oklch(0.7 0.1 140);
-  --chart-4: oklch(0.75 0.12 60);
-  --chart-5: oklch(0.6 0.18 300);
+  --chart-1: #2563eb;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #ec4899;
   
-  /* Sidebar */
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.55 0.2 250);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.96 0.01 250);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.915 0 0);
-  --sidebar-ring: oklch(0.55 0.2 250);
+  /* Sidebar - Light blue tint */
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #1e3a5f;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eff6ff;
+  --sidebar-accent-foreground: #1e40af;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #2563eb;
 }
 
+/* Force light theme - no dark mode */
 .dark {
-  --background: oklch(0.12 0 0);
-  --foreground: oklch(0.98 0 0);
+  --background: #ffffff;
+  --foreground: #1e3a5f;
   
-  --card: oklch(0.16 0 0);
-  --card-foreground: oklch(0.98 0 0);
+  --card: #ffffff;
+  --card-foreground: #1e3a5f;
   
-  --popover: oklch(0.16 0 0);
-  --popover-foreground: oklch(0.98 0 0);
+  --popover: #ffffff;
+  --popover-foreground: #1e3a5f;
   
-  /* Primary - SAMLA Blue (adjusted for dark) */
-  --primary: oklch(0.65 0.2 250);
-  --primary-foreground: oklch(0.12 0 0);
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
   
-  --secondary: oklch(0.22 0 0);
-  --secondary-foreground: oklch(0.98 0 0);
+  --secondary: #f1f5f9;
+  --secondary-foreground: #1e3a5f;
   
-  --muted: oklch(0.22 0.005 250);
-  --muted-foreground: oklch(0.65 0 0);
+  --muted: #f8fafc;
+  --muted-foreground: #64748b;
   
-  --accent: oklch(0.25 0.02 250);
-  --accent-foreground: oklch(0.98 0 0);
+  --accent: #eff6ff;
+  --accent-foreground: #1e40af;
   
-  --destructive: oklch(0.65 0.22 25);
+  --destructive: #ef4444;
   
-  --border: oklch(0.25 0 0);
-  --input: oklch(0.25 0 0);
-  --ring: oklch(0.65 0.2 250);
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #2563eb;
   
-  /* Charts */
-  --chart-1: oklch(0.65 0.2 250);
-  --chart-2: oklch(0.7 0.15 180);
-  --chart-3: oklch(0.75 0.1 140);
-  --chart-4: oklch(0.8 0.12 60);
-  --chart-5: oklch(0.7 0.18 300);
+  --chart-1: #2563eb;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #ec4899;
   
-  /* Sidebar */
-  --sidebar: oklch(0.14 0 0);
-  --sidebar-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.65 0.2 250);
-  --sidebar-primary-foreground: oklch(0.12 0 0);
-  --sidebar-accent: oklch(0.22 0.01 250);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.25 0 0);
-  --sidebar-ring: oklch(0.65 0.2 250);
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #1e3a5f;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eff6ff;
+  --sidebar-accent-foreground: #1e40af;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #2563eb;
 }
 
 @layer base {
@@ -149,6 +147,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
@@ -156,7 +155,7 @@
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: #cbd5e1 transparent;
   }
   
   .scrollbar-thin::-webkit-scrollbar {
@@ -169,12 +168,12 @@
   }
   
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: var(--border);
+    background-color: #cbd5e1;
     border-radius: 3px;
   }
   
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: var(--muted-foreground);
+    background-color: #94a3b8;
   }
 }
 
@@ -235,3 +234,15 @@
 .stagger-children > *:nth-child(6) { animation-delay: 250ms; }
 .stagger-children > *:nth-child(7) { animation-delay: 300ms; }
 .stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+
+/* Premium focus styles */
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Selection color */
+::selection {
+  background-color: #bfdbfe;
+  color: #1e3a5f;
+}
