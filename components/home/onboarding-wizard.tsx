@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +46,14 @@ import { COUNTRIES, BILLING_REGIONS, requiresEnterprise, getSingleRegion, type B
 
 // Step types
 type StepType = "welcome" | "language" | "workspace" | "region" | "team" | "ready";
+
+interface OnboardingStatus {
+  authenticated: boolean;
+  needsOnboarding: boolean;
+  hasWorkspace: boolean;
+  onboardingComplete: boolean;
+  wasInvited: boolean;
+}
 
 interface TeamMember {
   email: string;
@@ -264,9 +273,11 @@ const uiStrings: Record<string, Record<string, string>> = {
 };
 
 export function OnboardingWizard() {
+  const { user, isLoaded: isUserLoaded } = useUser();
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<StepType>("welcome");
   const [isLoading, setIsLoading] = useState(false);
+  const [statusChecked, setStatusChecked] = useState(false);
 
   // Language
   const [language, setLanguage] = useState("es");
@@ -293,14 +304,42 @@ export function OnboardingWizard() {
   const isMultiRegion = requiresEnterprise(selectedCountries);
   const billingRegion = getSingleRegion(selectedCountries);
 
-  useEffect(() => {
-    // Check if user needs onboarding
-    const hasCompletedOnboarding = localStorage.getItem("samla_onboarding_complete");
-    if (!hasCompletedOnboarding) {
-      const timer = setTimeout(() => setIsOpen(true), 500);
-      return () => clearTimeout(timer);
+  // Check onboarding status from server
+  const checkOnboardingStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/user/onboarding-status");
+      if (!response.ok) return;
+      
+      const status: OnboardingStatus = await response.json();
+      
+      // Only show onboarding if:
+      // 1. User is authenticated
+      // 2. User hasn't completed onboarding
+      // 3. User doesn't already have a workspace (wasn't invited)
+      if (status.authenticated && status.needsOnboarding && !status.hasWorkspace) {
+        setIsOpen(true);
+      }
+      
+      setStatusChecked(true);
+    } catch (error) {
+      console.error("Error checking onboarding status:", error);
+      setStatusChecked(true);
     }
   }, []);
+
+  useEffect(() => {
+    // Wait for Clerk to load and user to be available
+    if (!isUserLoaded || !user) return;
+    
+    // Check server-side onboarding status
+    if (!statusChecked) {
+      // Small delay to ensure everything is ready
+      const timer = setTimeout(() => {
+        checkOnboardingStatus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isUserLoaded, user, statusChecked, checkOnboardingStatus]);
 
   const steps: StepType[] = ["welcome", "language", "workspace", "region", "team", "ready"];
   const currentStepIndex = steps.indexOf(currentStep);
@@ -393,10 +432,10 @@ export function OnboardingWizard() {
     setIsLoading(true);
 
     try {
-      // Save language preference
+      // Save language preference locally
       localStorage.setItem("samla_language", language);
 
-      // Create workspace
+      // Create workspace via API
       const workspaceRes = await fetch("/api/workspace/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -411,7 +450,8 @@ export function OnboardingWizard() {
       });
 
       if (!workspaceRes.ok) {
-        throw new Error("Error creating workspace");
+        const errorData = await workspaceRes.json();
+        throw new Error(errorData.error || "Error creating workspace");
       }
 
       const { workspaceId } = await workspaceRes.json();
@@ -428,21 +468,39 @@ export function OnboardingWizard() {
         });
       }
 
-      localStorage.setItem("samla_onboarding_complete", "true");
+      // Mark onboarding as complete in Clerk user metadata
+      // This is done via API to update user metadata server-side
+      await fetch("/api/user/complete-onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          language,
+        }),
+      });
+
       toast.success(t.successWelcome);
       setIsOpen(false);
 
+      // Reload to apply new workspace context
       window.location.reload();
     } catch (error) {
       console.error("Onboarding error:", error);
-      toast.error(t.errorGeneral);
+      toast.error(error instanceof Error ? error.message : t.errorGeneral);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSkip = () => {
-    localStorage.setItem("samla_onboarding_complete", "true");
+  const handleSkip = async () => {
+    // Mark as skipped in metadata (can complete later)
+    try {
+      await fetch("/api/user/skip-onboarding", {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Error skipping onboarding:", error);
+    }
     setIsOpen(false);
   };
 

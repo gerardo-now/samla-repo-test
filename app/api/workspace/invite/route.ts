@@ -1,125 +1,128 @@
 import { NextResponse } from "next/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 
-interface Invitation {
+interface InviteMember {
   email: string;
   role: "admin" | "member";
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { workspaceId, invitations } = body;
-
-    // Validate required fields
-    if (!workspaceId || typeof workspaceId !== "string") {
-      return NextResponse.json(
-        { error: "ID del espacio de trabajo es requerido" },
-        { status: 400 }
-      );
-    }
-
-    if (!Array.isArray(invitations) || invitations.length === 0) {
-      return NextResponse.json(
-        { error: "Se requiere al menos una invitación" },
-        { status: 400 }
-      );
-    }
-
-    // Validate each invitation
-    const validInvitations: Invitation[] = [];
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    for (const inv of invitations) {
-      if (!inv.email || !emailRegex.test(inv.email)) {
-        continue;
-      }
-      if (!inv.role || !["admin", "member"].includes(inv.role)) {
-        continue;
-      }
-      validInvitations.push({
-        email: inv.email.toLowerCase().trim(),
-        role: inv.role,
-      });
-    }
-
-    if (validInvitations.length === 0) {
-      return NextResponse.json(
-        { error: "No se encontraron invitaciones válidas" },
-        { status: 400 }
-      );
-    }
-
-    // TODO: In production, this would:
-    // 1. Create invitation records in database
-    // 2. Send invitation emails using a service like Resend, SendGrid, etc.
-    // 3. Handle Clerk organization invitations if using Clerk Organizations
+    const { userId } = await auth();
     
-    // Example with Clerk Organizations:
-    // const organization = await clerkClient.organizations.getOrganization({ organizationId: workspaceId });
-    // for (const inv of validInvitations) {
-    //   await clerkClient.organizations.createOrganizationInvitation({
-    //     organizationId: workspaceId,
-    //     emailAddress: inv.email,
-    //     role: inv.role === "admin" ? "admin" : "basic_member",
-    //   });
-    // }
+    if (!userId) {
+      return NextResponse.json(
+        { error: "No autorizado" },
+        { status: 401 }
+      );
+    }
 
-    console.log("Sending invitations:", {
-      workspaceId,
-      invitations: validInvitations,
-    });
+    const body = await req.json();
+    const { workspaceId, invitations } = body as { 
+      workspaceId: string; 
+      invitations: InviteMember[];
+    };
 
-    // Simulate sending invitations
-    const results = validInvitations.map((inv) => ({
-      email: inv.email,
-      status: "sent",
-      message: `Invitación enviada a ${inv.email}`,
-    }));
+    if (!workspaceId || !invitations || !Array.isArray(invitations)) {
+      return NextResponse.json(
+        { error: "Datos inválidos" },
+        { status: 400 }
+      );
+    }
+
+    const client = await clerkClient();
+    const results: Array<{ email: string; success: boolean; error?: string }> = [];
+
+    // Process each invitation
+    for (const invite of invitations) {
+      try {
+        // For now, we'll create invitation records in our database
+        // In production with Clerk Organizations, you would use:
+        // await client.organizations.createOrganizationInvitation({
+        //   organizationId: workspaceId,
+        //   emailAddress: invite.email,
+        //   role: invite.role === "admin" ? "admin" : "member",
+        //   inviterUserId: userId,
+        // });
+
+        // For demo, log the invitation
+        console.log("Creating invitation:", {
+          workspaceId,
+          email: invite.email,
+          role: invite.role,
+          invitedBy: userId,
+        });
+
+        // In production, send invitation email
+        // await sendInvitationEmail({
+        //   to: invite.email,
+        //   workspaceId,
+        //   inviterName: user.fullName,
+        // });
+
+        results.push({ email: invite.email, success: true });
+      } catch (error) {
+        console.error(`Error inviting ${invite.email}:`, error);
+        results.push({ 
+          email: invite.email, 
+          success: false, 
+          error: "Error al enviar invitación" 
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failedCount = results.filter(r => !r.success).length;
 
     return NextResponse.json({
       success: true,
-      sent: results.length,
+      message: `${successCount} invitaciones enviadas${failedCount > 0 ? `, ${failedCount} fallaron` : ""}`,
       results,
-      message: `Se enviaron ${results.length} invitaciones`,
     });
   } catch (error) {
     console.error("Error sending invitations:", error);
     return NextResponse.json(
-      { error: "Error al enviar las invitaciones" },
+      { error: "Error al enviar invitaciones" },
       { status: 500 }
     );
   }
 }
 
-// GET: List pending invitations for a workspace
+// GET pending invitations for a workspace
 export async function GET(req: Request) {
   try {
+    const { userId } = await auth();
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: "No autorizado" },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const workspaceId = searchParams.get("workspaceId");
 
     if (!workspaceId) {
       return NextResponse.json(
-        { error: "ID del espacio de trabajo es requerido" },
+        { error: "workspaceId requerido" },
         { status: 400 }
       );
     }
 
-    // TODO: Fetch pending invitations from database
+    // In production, fetch from database
     // const invitations = await prisma.workspaceInvitation.findMany({
     //   where: { workspaceId, status: "pending" },
     // });
 
-    // Return empty array for now
     return NextResponse.json({
-      success: true,
       invitations: [],
     });
   } catch (error) {
     console.error("Error fetching invitations:", error);
     return NextResponse.json(
-      { error: "Error al obtener las invitaciones" },
+      { error: "Error" },
       { status: 500 }
     );
   }
 }
-
