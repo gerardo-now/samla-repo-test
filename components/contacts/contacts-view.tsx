@@ -48,19 +48,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, Plus, MoreHorizontal, Phone, Mail, Users, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Phone, Mail, Users, Loader2, Pencil, Trash2, LayoutGrid, List } from "lucide-react";
 import { toast } from "sonner";
-
-interface Contact {
-  id: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
-  email?: string;
-  company?: string;
-  status: "prospect" | "client" | "lost";
-  lastContactAt?: string;
-}
+import { ContactsKanbanView, Contact } from "./contacts-kanban-view";
+import { ContactDetailPanel } from "./contact-detail-panel";
 
 const statusConfig = {
   prospect: { label: UI.contacts.status.prospect, variant: "secondary" as const },
@@ -69,6 +60,7 @@ const statusConfig = {
 };
 
 export function ContactsView() {
+  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -78,6 +70,10 @@ export function ContactsView() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deleteContact, setDeleteContact] = useState<Contact | null>(null);
+  
+  // Detail panel
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // Form states
   const [formFirstName, setFormFirstName] = useState("");
@@ -113,6 +109,16 @@ export function ContactsView() {
     }, 300);
     return () => clearTimeout(debounce);
   }, [fetchContacts]);
+
+  // If in Kanban mode, delegate to that component
+  if (viewMode === "kanban") {
+    return (
+      <ContactsKanbanView 
+        viewMode={viewMode} 
+        onViewModeChange={setViewMode} 
+      />
+    );
+  }
 
   const handleOpenEditor = (contact?: Contact) => {
     if (contact) {
@@ -199,6 +205,11 @@ export function ContactsView() {
     }
   };
 
+  const handleContactClick = (contact: Contact) => {
+    setSelectedContact(contact);
+    setIsDetailOpen(true);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -236,10 +247,31 @@ export function ContactsView() {
           ))}
         </div>
 
-        <Button className="sm:ml-auto" onClick={() => handleOpenEditor()}>
-          <Plus className="h-4 w-4 mr-2" />
-          {UI.contacts.addNew}
-        </Button>
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <div className="flex border rounded-lg overflow-hidden">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode("kanban")}
+              className="rounded-none"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setViewMode("table")}
+              className="rounded-none"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <Button onClick={() => handleOpenEditor()}>
+            <Plus className="h-4 w-4 mr-2" />
+            {UI.contacts.addNew}
+          </Button>
+        </div>
       </div>
 
       {/* Contacts Table */}
@@ -274,7 +306,11 @@ export function ContactsView() {
                 </TableHeader>
                 <TableBody>
                   {contacts.map((contact) => (
-                    <TableRow key={contact.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableRow 
+                      key={contact.id} 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleContactClick(contact)}
+                    >
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
@@ -316,20 +352,26 @@ export function ContactsView() {
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleOpenEditor(contact)}>
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditor(contact);
+                            }}>
                               <Pencil className="h-4 w-4 mr-2" />
                               {UI.common.edit}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
-                              onClick={() => setDeleteContact(contact)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteContact(contact);
+                              }}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
                               {UI.common.delete}
@@ -345,6 +387,21 @@ export function ContactsView() {
           )}
         </CardContent>
       </Card>
+
+      {/* Contact Detail Panel */}
+      <ContactDetailPanel
+        contact={selectedContact}
+        isOpen={isDetailOpen}
+        onClose={() => {
+          setIsDetailOpen(false);
+          setSelectedContact(null);
+        }}
+        onContactUpdated={(updated) => {
+          setContacts(prev => prev.map(c => c.id === updated.id ? updated : c));
+          setSelectedContact(updated);
+        }}
+        onRefresh={fetchContacts}
+      />
 
       {/* Contact Editor Dialog */}
       <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
